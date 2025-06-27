@@ -1,4 +1,5 @@
-#ai generated
+#will return a list of regions where the query was hit to a reference genome
+# in a blatdiver output file
 
 
 def extract_blatdiver_coor(input):

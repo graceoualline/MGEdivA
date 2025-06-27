@@ -7,11 +7,6 @@ import sys
 
 #will keep Q name, Q start, Q end, T name(s), Q spec, T specie(s), divergence time(s), ani
 
-import csv
-import sys
-
-#will keep Q name, Q start, Q end, T name(s), Q spec, T specie(s), divergence time(s), ani
-
 def overlaps(start1, end1, start2, end2):
     if max(start1, start2) <= min(end1, end2):
         return min(end1, end2) - max(start1, start2)

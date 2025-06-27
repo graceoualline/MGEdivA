@@ -74,11 +74,14 @@ if __name__ == "__main__":
 
     kraken = load_hash_table(kraken)
     #do initial filter to keep everyone that is divergent
+    #this filter will just find the divergence time b/t ref and q then filter it
     filter_blat_multi(input_files, output_file, q_species, kraken, tree, input_file, blat_dir)
 
     #do second filter for overlap of chunks that map to divergently different species
     output_filtered_file = output_name + "_blatdiver_output_overlap_div_filtered.tsv"
+    #first, combine all hits that overlap and are hit to the same species
     rows = compress(output_file)
+    #then find two chunks that overlap but were hit to two divergently different species
     find_overlap_and_div(rows, output_filtered_file, tree, blat_dir, kraken)
  
 #python3 blat_pipeline/blat_main.py /usr1/gouallin/blastdiver/test_plasmids/one_lucky_plasmid.fasta test /usr1/shared/all_gtdb_id_and_kraken_species.txt /usr1/shared/TimeTree_v5_Final.nwk /usr1/shared/gtdb_split_2bit_1k/

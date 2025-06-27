@@ -208,8 +208,10 @@ def find_overlap_and_div(rows, output_file, tree, blat_db, kraken):
 
     with open(output_file, "w") as out:
         out.write("Q name\tQ size\tQ start\tQ end\tT name\tTsize\tQuery_Species\tReference_Species\tDivergence_Time_to_Q\tANI_of_whole_seqs(only_if_div=unk)\tDiv_bt_species\tAni_bt_species\n")
-        for l in new_rows:
-            out.write(l + "\n")
+        #if we do have new rows, then write them
+        if len(new_rows) > 0:
+            for l in new_rows:
+                out.write(l + "\n")
     print("number of lines before filter:", len(rows))
     print("number of lines after overlap:", len(new_rows))
 

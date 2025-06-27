@@ -12,6 +12,11 @@ def remove_large_gaps(input_file, output_file):
         tsv_writer = csv.writer(out, delimiter="\t")
         count_old = 0
         count_new = 0
+
+        # Read and write the header
+        header = next(tsv_reader)
+        tsv_writer.writerow(header)
+        
         for line in tsv_reader:
             count_old += 1
             #make sure is not a header
