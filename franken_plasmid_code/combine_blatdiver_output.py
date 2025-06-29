@@ -17,13 +17,19 @@ def adjust_and_merge_tsvs(chunk_dir, chunk_size, output_file, to_combine):
     for filename in all_files:
         print(filename)
         file = filename.split("/")[-1]
-        idx = int(file.split("_")[3])
-        #print(idx)
+        idx = int(file.split("_")[1])
         # Calculate chunk offset
-        offset = idx * chunk_size
-        #print("offset", offset, type(offset))
+        offset = int(idx * chunk_size)
 
-        df = pd.read_csv(filename, sep='\t')
+        with open(filename, 'r') as f:
+            first_line = f.readline()
+            has_header = not first_line.strip().split('\t')[0].isdigit()
+
+        if has_header:
+            df = pd.read_csv(filename, sep='\t')
+        else:
+            df = pd.read_csv(filename, sep='\t', header=None)
+            
         total_len += len(df)
         
         if df.empty:
@@ -31,16 +37,32 @@ def adjust_and_merge_tsvs(chunk_dir, chunk_size, output_file, to_combine):
 
         # Assuming start is in column 2 and end is in column 3 (0-based)
         #change these depending on what file it is
-        start_index = 2# 11 for full size
-        end_index = 3
-
-        df.iloc[:, start_index] = pd.to_numeric(df.iloc[:, start_index], errors = 'coerce') + offset  # Adjust start
-        df.iloc[:, end_index] = pd.to_numeric(df.iloc[:, end_index], errors = 'coerce') + offset  # Adjust end
+        
+        if df.shape[1] > 13:
+            start_index = 11
+            end_index = 12
+        else:
+            start_index = 2# 11 for full size
+            end_index = 3
+        #skip if its the first one, dont bother
+        if offset > 0:
+            df.iloc[:, start_index] = pd.to_numeric(df.iloc[:, start_index], errors = 'coerce') + offset  # Adjust start
+            df.iloc[:, end_index] = pd.to_numeric(df.iloc[:, end_index], errors = 'coerce') + offset  # Adjust end
 
         dfs.append(df)
+        
+        
 
     # Merge all
     final_df = pd.concat(dfs, ignore_index=True)
+
+    def is_misaligned(row):
+            # First two columns are blank but middle columns are not
+            return pd.isna(row[0]) and pd.isna(row[1]) and not pd.isna(row[10])
+
+    bad_rows = final_df[final_df.apply(is_misaligned, axis=1)]
+    print("Found misaligned rows:")
+    print(bad_rows.to_string(index=False))
 
     # Save
     final_df.to_csv(output_file, sep='\t', index=False)

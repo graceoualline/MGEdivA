@@ -174,16 +174,16 @@ def filter_blat(inf, outf, q_species, kraken, tree, q_seq, blat_db):
                     species_path_cache[ref_species] = get_path(ref_species, tree)
             # Get the divergence time between query species and reference species
                 div = get_div(path1, species_path_cache[ref_species], tree)
-            print("div", div, q_species, ref_species)
+            #print("div", div, q_species, ref_species)
             if div == None:
                 div = "unk:unable_to_find_ref_species_in_tree"
                 
             if div == 0:
                 continue  # Skip lines with zero divergence time
             elif "unk" in div:
-                print("div unknown:", ani)
+                #print("div unknown:", ani)
                 ani = find_ani(q_seq, ref_id, blat_db, kraken) 
-                print("ani calculated:", ani)
+                #print("ani calculated:", ani)
                 if ani >= 95:
                     continue #skip lines with 95 or more ani since that means they are same species
             else:

@@ -30,7 +30,7 @@ def filter_blat_multi(infiles, outf, q_species, kraken, tree, q_seq, blat_db):
         species_path_cache = {}
         # Process each input file line by line
         for inf in infiles:
-            print("filtering", inf)
+            #print("filtering", inf)
             with open(inf, 'r') as infile:
                 for line in infile:
                     columns = line.strip().split('\t')
@@ -43,10 +43,10 @@ def filter_blat_multi(infiles, outf, q_species, kraken, tree, q_seq, blat_db):
                     ref_id = columns[13]   # Reference sequence ID
                     
                     # Get the species of the reference sequence using Kraken and grep
-                    print("getting species of", ref_id)
+                    #print("getting species of", ref_id)
                     #this is still a big bottle neck
                     ref_species = process_kraken(kraken, ref_id)
-                    print("ref species", ref_species)
+                    #print("ref species", ref_species)
                     
                     if ref_species is None:
                         print(f"ERROR: Reference sequence {ref_id} not found in GTDB.")
@@ -57,20 +57,20 @@ def filter_blat_multi(infiles, outf, q_species, kraken, tree, q_seq, blat_db):
                     if q_species == "unclassified" or ref_species == "unclassified" or path1 == None:
                         div = "unk:unclassified_species"
                     else:
-                        print("getting div")
+                        #print("getting div")
                         if ref_species not in species_path_cache:
                             species_path_cache[ref_species] = get_path(ref_species, tree)
                         # Get the divergence time between query species and reference species
                         div = get_div(path1, species_path_cache[ref_species], tree)
-                        print("div", div)
+                        #print("div", div)
 
                     if div is None:
                         div = "unk:unable_to_find_ref_species_in_tree"
 
                     if type(div) == str and "unk" in div:
-                        print("div unknown:", div)
+                        #print("div unknown:", div)
                         ani = find_ani(q_seq, ref_id, blat_db, kraken) #make find_ani later
-                        print("ani calculated:", ani)
+                        #print("ani calculated:", ani)
                         if ani >= 95:
                             continue  # Skip lines with ANI >= 95 (same species)
                     # Skip those too closely related
@@ -85,7 +85,7 @@ def filter_blat_multi(infiles, outf, q_species, kraken, tree, q_seq, blat_db):
                     new_line.replace("\n", "")
                     outfile.write(f"{new_line}\t{q_species}\t{ref_species}\t{div}\t{ani}\n")
 
-            print(f"Finished processing: {inf}")
+            #print(f"Finished processing: {inf}")
 
     print(f"Processing complete. Results written to {outf}.")
 

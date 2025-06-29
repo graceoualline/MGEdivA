@@ -66,7 +66,7 @@ def compress(input_file):
         if rows[i] in used:
             i += 1
             continue
-        print(rows[i])
+        #print(rows[i])
         s1, e1, species1, row1 = int(rows[i][2]), int(rows[i][3]), rows[i][7], rows[i]
         #print(row1)
         if species1 == "unclassified":
@@ -172,13 +172,13 @@ def find_overlap_and_div(rows, output_file, tree, blat_db, kraken):
                 if species2 not in species_path_cache:
                     species_path_cache[species2] = get_path(species1, tree)
                 div = get_div_alt(species_path_cache[species1], species_path_cache[species2], tree)
-                print(f"Divergence {species1} {species2} {div}")
+                #print(f"Divergence {species1} {species2} {div}")
                 if div == None:
                     #get the ani instead
                     id1 = row1[4]
                     id2 = row2[4]
                     ani = find_ani_overlap(id1, id2, blat_db, kraken) #make find_ani later
-                    print("ani calculated:", ani)
+                    #print("ani calculated:", ani)
                    
                 if (div != None and div >= 1) or (ani != None and ani < 95):
                     #print("merging rows")

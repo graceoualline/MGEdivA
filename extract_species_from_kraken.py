@@ -12,7 +12,7 @@ def process_kraken(kraken_file):
         for line in infile:
             id = line.split('\t')[1]
             species = line.split('\t')[2].split('(')[0].strip()
-            print(id, species)
+            #print(id, species)
             all_species.add((id, species))
     return all_species
 

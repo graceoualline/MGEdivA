@@ -1,3 +1,4 @@
+# VERY SLOW DO NOT USE
 # I will intake the kraken file with all seq ids in the first column and all species in the second
 # then I will find the file name of the 2bit file where the seq id is located
 # and add it to the 3rd column

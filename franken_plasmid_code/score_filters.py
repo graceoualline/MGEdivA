@@ -6,6 +6,7 @@ import pandas as pd
 import sys
 
 
+#this should just return the Q start and Q end columns as its own df
 def load_regions_from_tsv(tsv_file):
     #df = pd.read_csv(tsv_file, sep='\t', header = None)
     df = pd.read_csv(tsv_file, sep='\t')
@@ -15,6 +16,7 @@ def load_regions_from_tsv(tsv_file):
     new_df = df[['Q start', 'Q end']].copy()
     return new_df
 
+# get rid of overlapping intervals so we aren't double counting the score
 def merge_intervals(intervals_df):
     """Merge overlapping intervals."""
     
@@ -46,10 +48,11 @@ def calculate_coverage(coor, arg_regions):
     total_overlap_area = 0
     total_found_area = 0
     
-    #optimized  this to only look at areas where it may overlap, do that later
+    #optimize this to only look at areas where it may overlap, do that later
     arg_index = 0
+    # i is index, c is start and end
     for i, c in enumerate(coor): 
-        print(i)
+        #print(i)
         c_start, c_end = int(c[0]), int(c[1])
         total_found_area += c_end - c_start
         # Skip arg regions that are completely before this coordinate
@@ -79,31 +82,69 @@ if __name__ == "__main__":
     found_tsv = sys.argv[2]  # your software output
     output = sys.argv[3]
 
-
     df = pd.read_csv(arg_csv)
-    arg_regions = df[df.iloc[:, 1] <= 11500000]  # REMOVE THIS IF WE END UP DOING MORE THAN 114 CHUNKS, filtered for args within the first 114 chunks
-
+    #remove any args that exist after 11500000 bp because that is when it prematurely stopped
+    #arg_regions = df[df.iloc[:, 1] <= 11500000].copy()  # REMOVE THIS IF WE END UP DOING MORE THAN 114 CHUNKS, filtered for args within the first 114 chunks
+    #this is first column, the arg name, start, end
+    arg_regions = df
     #print((f"Area of args that were inserted: {(arg_regions.iloc[:, 2] - arg_regions.iloc[:, 1]).sum()}"))
 
+
+    # this is a df with the Q start and Q end sections of 
     found_regions = load_regions_from_tsv(found_tsv)
     print("loaded the tsv")
 
+    #if there are any intervals found that overlap, this gets rid of them
     merged_found_regions = merge_intervals(found_regions)
     print("num regions found", len(merged_found_regions))
 
+    # found args is a dictionary of which arg was found, and its amount of overlap
+    # within_args is just the total area found within the args
+    # outside_args is total area found outside args
     found_args, within_args, outside_args = calculate_coverage(merged_found_regions, arg_regions)
+
+
+     #this is the total area of all args found
+    area_of_all_args = (arg_regions.iloc[:, 2] - arg_regions.iloc[:, 1]).sum()
+
+    #this is adding an area column for each arg
+    arg_regions['length_bp'] = arg_regions.iloc[:, 2] - arg_regions.iloc[:, 1]
+
+    #this is mapping the found arg dictionary to the names in the arg regions
+    arg_regions['found_bp'] = arg_regions.iloc[:, 0].map(found_args)
+
+    # get the percent found of that arg
+    arg_regions['percent_area_found'] = arg_regions['found_bp'] / arg_regions['length_bp']
+    #this is the total area we found
+    found_area_of_args = arg_regions['found_bp'].sum()
+    #this is the total area we should have found
+
+    all_area_of_found_args = 0
+    for arg in found_args:
+        row = arg_regions[arg_regions.iloc[:, 0] == arg]
+        if not row.empty:
+            all_area_of_found_args += int((row.iloc[0, 2] - row.iloc[0, 1]))
+
+    #get the number of args where >= 90% of their area was found
+    num_over_90 = (arg_regions['percent_area_found'] >= 0.9).sum()
 
     with open(output, 'w') as output:
         output.write(f"Number of ARGs found: {len(found_args)}\n")
         output.write(f"Number of ARGs that were inserted: {len(arg_regions)}\n")
         #get the area of the args that were inserted
-        area_of_args = (arg_regions.iloc[:, 2] - arg_regions.iloc[:, 1]).sum()
-        output.write(f"Area of args that were inserted: {area_of_args}\n")
-        output.write(f"bp area that filter found within ARGs: {within_args}\n")
-        output.write(f"bp area that filter found outside ARGs: {outside_args}\n")
         output.write(f"percentage of args found: {len(found_args)/len(arg_regions)}\n")
-        output.write(f"ratio of non-arg area to length of genome: {outside_args / 11500000}\n")
+        #REPLACE WITH TOTAL AREA OF HOST GENOME
+        output.write(f"Percent of host genome found: {outside_args/2011548}\n")
+        
+        #output.write(f"Area of args that were inserted: {area_of_args}\n")
+        #output.write(f"bp area that filter found within ARGs: {within_args}\n")
+        #output.write(f"total bp area of the args that we did find: {all_area_of_found_args}\n")
+        #output.write(f"bp area that filter found outside ARGs: {outside_args}\n")        
 
-        output.write("Found args, and the bp of them found::\n")
-        for arg in found_args:
-            output.write(f"{arg},{found_args[arg]}\n")
+        
+        output.write(f"Of args found, the percent of area found within them: {within_args / all_area_of_found_args}\n")
+        output.write(f"Of args found, percent that has >= 90% of area found: {num_over_90 / len(found_args)}")
+        
+        #output.write("Found args, and the bp of them found::\n")
+        #for arg in found_args:
+        #    output.write(f"{arg},{found_args[arg]}\n")

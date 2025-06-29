@@ -7,7 +7,7 @@ import csv
 
 def remove_large_gaps(input_file, output_file):
     with open(input_file, 'r') as f, open(output_file, 'w', newline='') as out:
-        print("File", input_file, "opened")
+        #print("File", input_file, "opened")
         tsv_reader = csv.reader(f, delimiter="\t")
         tsv_writer = csv.writer(out, delimiter="\t")
         count_old = 0

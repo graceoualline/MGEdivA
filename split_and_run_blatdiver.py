@@ -8,10 +8,11 @@ import subprocess
 from multiprocessing import Pool, cpu_count
 from Bio import SeqIO
 from blat_main import *
+from datetime import datetime
 
 # === CONFIGURATION ===                  
 max_threads = 46                   # Use half of all available threads
-
+'''
 input_fasta = "/usr1/gouallin/blat/franken_plasmid_tests/franken_arg/franken_arg.fasta"
 chunk_size = 100000 
 output_dir = "franken_arg_blat_outputs_100k"
@@ -21,7 +22,7 @@ input_fasta = "/usr1/gouallin/blat/franken_plasmid_tests/test_arg_results/one_lu
 chunk_size = 1000
 output_dir = "one_lucky_arg_blat_outputs_1000"
 species = "Salmonella_enterica"
-'''
+
 if not os.path.exists(output_dir):
         os.makedirs(output_dir)
 
@@ -174,6 +175,7 @@ def combine_all_results():
     
 # === MAIN ===
 def main():
+    print("Start time:", datetime.now())
     
     chunk_jobs = []
 
@@ -209,6 +211,7 @@ def main():
 
     combine_all_results()
     print("All BLAT jobs finished.")
+    print("Endtime time:", datetime.now())
 
 if __name__ == "__main__":
     main()

@@ -1,3 +1,4 @@
+# I dont think I use this anywhere
 # if a file is over 200 kbp, this will sqpit the query into 200kbp files
 # right now, even if it is 200,001 bp it will get split, will worry about this later
 

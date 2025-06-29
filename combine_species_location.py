@@ -18,6 +18,6 @@ with open(output_file, "w") as fout, open(location_file, "r") as fin:
         parts = line.strip().split("\t")
         if len(parts) >= 2:
             seq_id, file_location = parts[0], parts[1]
-            print("finding", seq_id)
+            #print("finding", seq_id)
             species = seq_to_species.get(seq_id, "unknown_species")
             fout.write(f"{seq_id}\t{species}\t{file_location}\n")
