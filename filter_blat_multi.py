@@ -71,7 +71,7 @@ def filter_blat_multi(infiles, outf, q_species, kraken, tree, q_seq, blat_db):
                         #print("div unknown:", div)
                         ani = find_ani(q_seq, ref_id, blat_db, kraken) #make find_ani later
                         #print("ani calculated:", ani)
-                        if ani >= 95:
+                        if type(ani) != str and ani >= 95:
                             continue  # Skip lines with ANI >= 95 (same species)
                     # Skip those too closely related
                     elif div < 1:
@@ -112,9 +112,11 @@ if __name__ == "__main__":
     #then filter all blat results and add divergence or ani
     input_files = glob.glob(os.path.join(directory, "*.psl"))
     output_filtered_file = output_name + "_blatdiver_output.tsv"
-
-    kraken = load_hash_table(kraken)
-    filter_blat_multi(input_files, output_filtered_file, q_species, kraken, tree, input_file, blat_dir)
+    if os.path.exists(output_filtered_file):
+        print(f"Skipping {output_filtered_file} , already exists.")
+    else:
+        kraken = load_hash_table(kraken)
+        filter_blat_multi(input_files, output_filtered_file, q_species, kraken, tree, input_file, blat_dir)
  
 #python3 blat_pipeline/blat_main.py /usr1/gouallin/blastdiver/test_plasmids/one_lucky_plasmid.fasta test /usr1/shared/all_gtdb_id_and_kraken_species.txt /usr1/shared/TimeTree_v5_Final.nwk /usr1/shared/gtdb_split_2bit_1k/
 

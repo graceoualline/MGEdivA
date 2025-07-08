@@ -13,6 +13,7 @@ import os
 import tempfile
 import bisect
 from seq_id_index import *
+from Bio import SeqIO
 
 def get_path(sp, tree):
     sp = "_".join(sp.split(" "))
@@ -67,6 +68,12 @@ def process_kraken(hash_table, seq_id):
         print(f"Error when finding {seq_id}: {e}")
         return "unclassified"
 
+def count_basepairs(fasta_path):
+    total = 0
+    for record in SeqIO.parse(fasta_path, "fasta"):
+        total += len(record.seq)
+    return total
+
 def calculate_distance(seq1, seq2):
     """
     Calculates the ANI distance between two sequences using skani.
@@ -78,6 +85,11 @@ def calculate_distance(seq1, seq2):
     Returns:
     - float: ANI value (or 0 if not found).
     """
+    #skani wont work if sequence under 500 bp
+    if count_basepairs(seq1) < 500:
+        return "unk:query_too_short"
+    if count_basepairs(seq2) < 500:
+        return "unk:ref_too_short"
     try:
         # Run the skani command to calculate distance
         result = subprocess.run(
@@ -100,7 +112,7 @@ def calculate_distance(seq1, seq2):
             return 0
     except (IndexError, ValueError, subprocess.CalledProcessError) as e:
         print(f"Error running skani: {e}")
-        return 0  # Return 0 in case of errors
+        return "unk:skani_err"  # Return 0 in case of errors
 
 
 def extract_2bit_fasta(ref_id, kraken, blat_db):
@@ -110,10 +122,10 @@ def extract_2bit_fasta(ref_id, kraken, blat_db):
         print(f"Error: Reference ID {ref_id} not found in {blat_db}")
         return None
     
-    ref_2bit_file = blat_db + "/" + ref_2bit_file
+    ref_2bit_file = os.path.join(blat_db, ref_2bit_file.lstrip("/"))
     
     # Step 2: Extract the reference sequence from the identified .2bit file
-    with tempfile.NamedTemporaryFile(suffix=".fa", delete=False) as ref_fasta:
+    with tempfile.NamedTemporaryFile(prefix = f"reference_{ref_id}", suffix=".fa", delete=False) as ref_fasta:
         ref_fasta_name = ref_fasta.name
         subprocess.run(["twoBitToFa", ref_2bit_file, "-seq=" + ref_id, ref_fasta_name], check=True)
         #print(ref_fasta_name)
@@ -180,14 +192,14 @@ def filter_blat(inf, outf, q_species, kraken, tree, q_seq, blat_db):
                 
             if div == 0:
                 continue  # Skip lines with zero divergence time
-            elif "unk" in div:
+            elif type(div) == str:
                 #print("div unknown:", ani)
                 ani = find_ani(q_seq, ref_id, blat_db, kraken) 
                 #print("ani calculated:", ani)
-                if ani >= 95:
+                if type(ani) != str and ani >= 95:
                     continue #skip lines with 95 or more ani since that means they are same species
             else:
-                ani = "N/A"
+                ani = "NA"
             
             # Write the line with the added divergence time, query species, and reference species
             new_line = columns #columns[9:]

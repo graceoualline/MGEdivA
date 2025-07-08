@@ -25,8 +25,8 @@ def remove_large_gaps(input_file, output_file):
                 if int(line[0]) >= int(line[5]):
                     tsv_writer.writerow(line)
                     count_new += 1
-        print("Number of lines before:", count_old)
-    print("Number of lines after:", count_new)
+        #print("Number of lines before:", count_old)
+    #print("Number of lines after:", count_new)
 
 if __name__ == "__main__":
     # Check if the correct number of command-line arguments is provided

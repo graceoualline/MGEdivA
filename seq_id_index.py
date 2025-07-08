@@ -54,8 +54,8 @@ def lookup_location(hash_table, seq_id):
 
 # Example usage
 # Example usage
-#kraken_file = "/usr1/gouallin/blat/blat_pipeline/all_gtdb_seq_species_location.txt"  # Input file
-index_file = "/usr1/shared/all_gtdb_seq_species_location_index.pkl"  # Output file for the hash table
+#kraken_file = "/usr1/gouallin/blat/all_gtdb_seq_species_location_smart_split.txt"  # Input file
+#index_file = "/usr1/shared/all_gtdb_seq_species_location_index_smart_split.pkl"  # Output file for the hash table
 #build_and_store_hash_table(kraken_file, index_file)
 '''#tests
 hash_table = load_hash_table(index_file)  # Load the hash table once

@@ -28,17 +28,18 @@ def process_value(ref_id):
     ref_file = ref_2bit_file.split("/")
     return ref_file[-1]
 
-kraken_file = "/usr1/shared/all_gtdb_id_and_kraken_species.txt"
-output_file = "all_gtdb_id_species_location.tsv"  # Replace with your desired output file
+def main():
+    kraken_file = "/usr1/shared/all_gtdb_id_and_kraken_species.txt"
+    output_file = "all_gtdb_id_species_location.tsv"  # Replace with your desired output file
 
 
-with open(kraken_file, "r") as infile, open(output_file, "w") as outfile:
-    for line in infile:
-        columns = line.strip().split("\t")  # Adjust delimiter if needed
-        seq_id = columns[0]
-        seq_file = process_value(seq_id)  # Run first column through function
-        out_line = "\t".join(columns) + f"\t{seq_file}\n"
-        outfile.write(out_line)  # Store line in the list
+    with open(kraken_file, "r") as infile, open(output_file, "w") as outfile:
+        for line in infile:
+            columns = line.strip().split("\t")  # Adjust delimiter if needed
+            seq_id = columns[0]
+            seq_file = process_value(seq_id)  # Run first column through function
+            out_line = "\t".join(columns) + f"\t{seq_file}\n"
+            outfile.write(out_line)  # Store line in the list
 
 
-print(f"Output written to {output_file}")
+    print(f"Output written to {output_file}")
