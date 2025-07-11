@@ -16,6 +16,8 @@ from seq_id_index import *
 from Bio import SeqIO
 
 def get_path(sp, tree):
+    if sp == "unclassified":
+        return "NA"
     sp = "_".join(sp.split(" "))
     sp = "'"+sp+"'"
 
@@ -38,7 +40,7 @@ def get_path(sp, tree):
                     if first[0] in node.name:
                         return node
                 print("sp not found", sp)
-                return None
+                return "NA"
     return path
 
 #this is taken from PAReTT and altered
@@ -47,7 +49,7 @@ def get_div(path1, path2, tree):
     #path1 = get_path(sp1, tree)
     #path2 = get_path(sp2, tree)
     #print(sp1, sp2)
-    if path1 == None or path2 == None:
+    if path1 == "NA" or path2 == "NA":
         return None
 
     distance = path1.get_distance(path2)

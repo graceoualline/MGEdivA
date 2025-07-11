@@ -25,12 +25,17 @@ def adjust_and_merge_tsvs(chunk_dir, chunk_size, output_file, to_combine):
             first_line = f.readline()
             has_header = not first_line.strip().split('\t')[0].isdigit()
 
-        if has_header:
-            df = pd.read_csv(filename, sep='\t')
-        else:
-            df = pd.read_csv(filename, sep='\t', header=None)
+        try:
+            if has_header:
+                df = pd.read_csv(filename, sep='\t')
+            else:
+                df = pd.read_csv(filename, sep='\t', header=None)
             
-        total_len += len(df)
+            total_len += len(df)
+        except:
+            #if theres an error with the df being made, just skip it
+            print(filename, "is empty")
+            continue
         
         if df.empty:
             continue  # Skip empty chunks
@@ -52,22 +57,24 @@ def adjust_and_merge_tsvs(chunk_dir, chunk_size, output_file, to_combine):
         dfs.append(df)
         
         
+    try:
+        # Merge all
+        final_df = pd.concat(dfs, ignore_index=True)
 
-    # Merge all
-    final_df = pd.concat(dfs, ignore_index=True)
+        def is_misaligned(row):
+                # First two columns are blank but middle columns are not
+                return pd.isna(row[0]) and pd.isna(row[1]) and not pd.isna(row[10])
 
-    def is_misaligned(row):
-            # First two columns are blank but middle columns are not
-            return pd.isna(row[0]) and pd.isna(row[1]) and not pd.isna(row[10])
+        bad_rows = final_df[final_df.apply(is_misaligned, axis=1)]
+        print("Found misaligned rows:")
+        print(bad_rows.to_string(index=False))
 
-    bad_rows = final_df[final_df.apply(is_misaligned, axis=1)]
-    print("Found misaligned rows:")
-    print(bad_rows.to_string(index=False))
-
-    # Save
-    final_df.to_csv(output_file, sep='\t', index=False)
-    print(f"Combined file written to {output_file}")
-    print("Total length is", total_len)
+        # Save
+        final_df.to_csv(output_file, sep='\t', index=False)
+        print(f"Combined file written to {output_file}")
+        print("Total length is", total_len)
+    except:
+        print(f"There are no {to_combine} to combine")
 
 if __name__ == "__main__":
     if len(sys.argv) != 5:

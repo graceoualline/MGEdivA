@@ -5,10 +5,11 @@ import sys
 import subprocess
 
 def main():
-    input_files = [f"split_{i}_output.2bit" for i in range(1, 47)]
-    output_names = [f"split_{i}_output.ooc" for i in range(1, 47)]
+    input_files = [f"split_{i}_output.2bit" for i in range(1, 138)]
+    output_names = [f"split_{i}_output.ooc" for i in range(1, 138)]
 
     for input_file, output_file in zip(input_files, output_names):
         # Check if the file is a regular file
         print("running:", "blat", input_file, "/dev/null", "/dev/null", f"-makeOoc={output_file}", "-repMatch=1024")
         subprocess.run(["blat", input_file, "/dev/null", "/dev/null", f"-makeOoc={output_file}", "-repMatch=1024"])
+main()

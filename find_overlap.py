@@ -14,7 +14,7 @@ def overlaps(start1, end1, start2, end2):
     return None
 
 #if it finds regions that overlap and map to the same species, it will combine them
-def compress(input_file, output_file):
+def compress(input_file):
     rows = set()
 
     with open(input_file, 'r') as f:
@@ -66,12 +66,6 @@ def compress(input_file, output_file):
     row_cur[3] = str(e_cur)
     compressed.append(tuple(row_cur))
     #print(compressed)
-    compressed_output = f"compressed_{output_file}"
-    with open(compressed_output, "w") as out:
-        out.write("Q name\tQ size\tQ start\tQ end\tT name\tTsize\tQuery_Species\tReference_Species\tDivergence_Time\tANI_of_whole_seqs(only_if_div=unk)\n")
-        for l in compressed:
-            line = "\t".join(l)
-            out.write(line + "\n")
     return compressed
 
 def build_overlap_row(row1, row2, new_start, new_end, ani_value):
@@ -111,7 +105,7 @@ def find_overlap(rows, output_file, blat_db, gtdb_index):
                     id2 = row2[4]
                     # goes to find_overlap_and_div.py
                     ani = find_ani_overlap(id1, id2, blat_db, gtdb_index)
-                    if ani != None and ani < 95:
+                    if ani != None and (type(ani) != str and ani < 95):
                         new_row = build_overlap_row(row1, row2, new_start, new_end, ani)
                         new_rows.add(new_row)
                         used.add(rows[i])
@@ -142,6 +136,6 @@ if __name__ == "__main__":
     blat_db = sys.argv[3]
     gtdb_index = load_hash_table(sys.argv[4])
 
-    rows = compress(input_file, output)
+    rows = compress(input_file)
     find_overlap(rows, output, blat_db, gtdb_index)
     print("Filtered file written to", output)

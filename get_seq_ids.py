@@ -5,8 +5,8 @@ import tempfile
 
 # Generate file names
 def main():
-    input_files = [f"split_{i}_output.2bit" for i in range(1, 47)]
-    final_output = "sequence_id_to_2bitfile_mapping_smart_split.txt"  # Consolidated output file
+    input_files = [f"split_{i}_output.2bit" for i in range(1, 138)]
+    final_output = "sequence_id_to_2bit_mapping_smart_split.txt"  # Consolidated output file
 
     with open(final_output, "w") as fout:
         for inputf in input_files:

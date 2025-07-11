@@ -13,7 +13,10 @@ def load_regions_from_tsv(tsv_file):
     # Assuming the TSV has 'start' and 'end' in columns 2 and 3 (zero-indexed as 1 and 2)
     print(df.columns.tolist())
     #new_df = df[[11, 12]].copy()
-    new_df = df[['Q start', 'Q end']].copy()
+    try:
+        new_df = df[['Q start', 'Q end']].copy()
+    except:
+        new_df = df[['Q start', ' Q end']].copy()
     return new_df
 
 # get rid of overlapping intervals so we aren't double counting the score

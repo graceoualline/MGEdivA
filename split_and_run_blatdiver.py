@@ -58,6 +58,7 @@ def run_all_filters(args):
     #no gaps
     #python3 remove_large_gaps.py <blatdiver_output.tsv> <output file name>
     no_gaps = os.path.join(output_dir, f"chunk_{idx}_{original_id}_no_gaps.tsv")
+    
     if os.path.exists(no_gaps):
         print(f"Skipping {no_gaps} , already exists.")
     else:
@@ -72,7 +73,7 @@ def run_all_filters(args):
             subprocess.run(no_gaps_cmd, check=True)
         except subprocess.CalledProcessError as e:
             print(f"Error running no gaps on chunk {idx}: {e}")
-      
+    
     #overlap
     #Usage: python3 find_overlap.py <file of blatdiver output> <output file name>
     overlap = os.path.join(output_dir, f"chunk_{idx}_{original_id}_overlap.tsv")
@@ -83,6 +84,8 @@ def run_all_filters(args):
                     "/usr1/gouallin/blat/blat_pipeline/find_overlap.py",
                     output_file, 
                     overlap, 
+                    database,
+                    index
                     ]
         try:
             #run the command
@@ -99,7 +102,9 @@ def run_all_filters(args):
         overlap_gap_cmd = ["python3",
                     "/usr1/gouallin/blat/blat_pipeline/find_overlap.py",
                     no_gaps, 
-                    overlap_gap, 
+                    overlap_gap,
+                    "/usr1/shared/gtdb_split_2bit_1k/",
+                    "/usr1/shared/all_gtdb_seq_species_location_index.pkl"
                     ]
         try:
             #run the command
@@ -110,7 +115,7 @@ def run_all_filters(args):
 
     #overlap and gap and divergence
     #python3 find_overlap_and_div.py <file of blatdiver output> <output file name> <tree> <blat_db> <kraken>
-
+    
     overlap_gap_div = os.path.join(output_dir, f"chunk_{idx}_{original_id}_no_gap_overlap_div.tsv")
     if os.path.exists(overlap_gap_div):
         print(f"Skipping {overlap_gap_div} , already exists.")
@@ -129,10 +134,10 @@ def run_all_filters(args):
             subprocess.run(overlap_gap_div_cmd, check=True)
         except subprocess.CalledProcessError as e:
             print(f"Error running overlap, gap, div on chunk {idx}: {e}")
-    
+    '''
     #overlap and divergence
     #this was already done for us in filter_blat_main
-    '''overlap_div = os.path.join(output_dir, f"chunk_{idx}_{original_id}_overlap_div")
+    overlap_div = os.path.join(output_dir, f"chunk_{idx}_{original_id}_overlap_div.tsv")
     overlap_div_cmd = ["python3",
                 "find_overlap_and_div.py",
                 output_file, 
@@ -152,7 +157,7 @@ def run_all_filters(args):
 def run_blat_on_chunk(args):
     chunk_record, idx, original_id, species = args
     print(f"BLATTING CHUNK {idx}")
-
+    
     # make a temporary file that isolates the fasta on its own
     with tempfile.NamedTemporaryFile(prefix=f"chunk_{idx}_{original_id}_tmp", mode="w", delete=False, suffix=".fa") as tmp_fasta:
         SeqIO.write(chunk_record, tmp_fasta, "fasta")
@@ -240,17 +245,17 @@ if __name__ == "__main__":
         #get the length of the sequence
         seq_len = len(record.seq)
 
-        #change this later to be override if a user defines the species they want
-        try:
-            with tempfile.NamedTemporaryFile(prefix=f"{record.id}_tmp", mode="w", delete=False, suffix=".fa") as tmp_fasta:
-                SeqIO.write(record, tmp_fasta, "fasta")
-                tmp_fasta_path = tmp_fasta.name
-            species = get_q_species(tmp_fasta_path, kraken_db)
-            os.remove(tmp_fasta_path)
-        except:
-            print("Issue extracting species for", record[:0])
-            species = "unclassified"
-        #if the sequence length is greater than the chunk size we want
+        if species == "unk":
+            try:
+                with tempfile.NamedTemporaryFile(prefix=f"{record.id}_tmp", mode="w", delete=False, suffix=".fa") as tmp_fasta:
+                    SeqIO.write(record, tmp_fasta, "fasta")
+                    tmp_fasta_path = tmp_fasta.name
+                species = get_q_species(tmp_fasta_path, kraken_db)
+                os.remove(tmp_fasta_path)
+            except:
+                print("Issue extracting species for", record[:0])
+                species = "unclassified"
+            #if the sequence length is greater than the chunk size we want
         if seq_len > chunk_size:
             for i in range(chunk_size, seq_len, chunk_size):
                 #then we chunk it by size

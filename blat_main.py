@@ -97,7 +97,7 @@ if __name__ == "__main__":
         filter_blat_multi(input_files, output_file, q_species, kraken, tree, input_file, blat_dir)
 
     #do second filter for overlap of chunks that map to divergently different species
-    output_filtered_file = output_name + "_blatdiver_output_overlap_div_filtered.tsv"
+    output_filtered_file = output_name + "_blatdiver_output_overlap_div.tsv"
     #first, combine all hits that overlap and are hit to the same species
     if os.path.exists(output_filtered_file):
         print(f"Skipping {output_filtered_file} , already exists.")

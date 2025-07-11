@@ -28,6 +28,7 @@ def filter_blat_multi(infiles, outf, q_species, kraken, tree, q_seq, blat_db):
         # Write the header
         outfile.write("match\tmismatch\trep. match\tN's\tQ gap count \t Q gap bases\tT gap count \tT gap bases\tstrand\tQ name\tQ size\tQ start\t Q end\tT name\tT size\tT start\tT end\tblock count\tblockSizes\tqStarts\ttStarts\tQuery_Species\tReference_Species\tDivergence_Time\tANI_of_whole_seqs(only_if_div=unk)\n")
         species_path_cache = {}
+        species_path_cache["unclassified"] = "NA"
         # Process each input file line by line
         for inf in infiles:
             #print("filtering", inf)
@@ -54,11 +55,12 @@ def filter_blat_multi(infiles, outf, q_species, kraken, tree, q_seq, blat_db):
                         
 
                     # Determine divergence time
-                    if q_species == "unclassified" or ref_species == "unclassified" or path1 == None:
+                    if q_species == "unclassified" or ref_species == "unclassified" or path1 == "NA":
                         div = "unk:unclassified_species"
                     else:
                         #print("getting div")
                         if ref_species not in species_path_cache:
+                            #if species == "unclassified_Arthrobacter": print("filter_blat", outf)
                             species_path_cache[ref_species] = get_path(ref_species, tree)
                         # Get the divergence time between query species and reference species
                         div = get_div(path1, species_path_cache[ref_species], tree)
