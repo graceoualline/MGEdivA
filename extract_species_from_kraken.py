@@ -34,7 +34,7 @@ def get_sp_from_kraken(kraken_output_file):
         species = last_line[5:]
         species = "_".join(species)
         #print("Last line:", last_line)
-        print(species)
+        print("Species:", species)
         
     return species
 
@@ -46,21 +46,23 @@ def get_q_species(fasta_file, kraken_db):
         "kraken2", "--db", kraken_db, "--threads", "1",
         "--report", tmp_filename, fasta_file
     ]
-    print("Finding query species")
+    print("Finding query species with Kraken")
     print(" ".join(command))
     # Run the command
-    subprocess.run(command, check = True)
-    print("Done running kraken")
-    species = get_sp_from_kraken(tmp_filename)
-
-    if os.path.exists(tmp_filename):
-        os.remove(tmp_filename)
+    try:
+        #run the command
+        subprocess.run(command, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, check=True)
+        #print("Done running kraken")
+        species = get_sp_from_kraken(tmp_filename)
     
+    except subprocess.CalledProcessError as e:
+        print(f"Error running Kraken on {fasta_file}:\n{e.stderr.decode().strip()}")
+        species = "unclassified"
+    finally:
+        if os.path.exists(tmp_filename):
+            os.remove(tmp_filename)
+
     return species
-    #except:
-    #    print("Error finding species of the query")
-    #    if os.path.exists(tmp_filename):
-    #        os.remove(tmp_filename)
 
 if __name__ == "__main__":
     # Check if the correct number of command-line arguments is provided
@@ -71,15 +73,3 @@ if __name__ == "__main__":
     q_seq = sys.argv[1]   
     kraken_db = sys.argv[2]    
     get_q_species(q_seq, kraken_db)
-#db = "/usr1/shared/kraken2_custom_db"
-#file = "/usr1/gouallin/random_ctrl/full_genomes/full_rand_1/CP003077.2_random.fasta"
-#get_q_species(file, db)
-'''
-kraken_file = "kraken_all_gtdb_output.txt"
-all_species = process_kraken(kraken_file)
-print("num of ids and species", len(all_species))
-output_file = "all_gtdb_id_and_kraken_species.txt"
-
-with open(output_file, 'w') as outfile:
-    for id, species in all_species:
-        outfile.write(f"{id}\t{species}\n")'''

@@ -4,7 +4,28 @@
 # will be O(N^2)
 import csv
 import sys
-from find_overlap_and_div import *
+from filter_blat import *
+
+def find_ani_overlap(q_id, ref_id, blat_db, kraken):
+    """
+    Finds the ANI between a query sequence and a reference sequence stored in a .2bit file.
+
+    Parameters:
+    - q_seq (str): Path to the query sequence (FASTA format).
+    - ref_id (str): The reference sequence ID to extract.
+    - blat_db (str): Path to the folder containing .2bit files.
+
+    Returns:
+    - float: ANI value (or None if reference is not found).
+    """
+    q_seq = extract_2bit_fasta(q_id, kraken, blat_db)
+    ref_fasta_name = extract_2bit_fasta(ref_id, kraken, blat_db)
+        
+    distance = calculate_distance(q_seq, ref_fasta_name)
+
+    os.remove(q_seq)
+    os.remove(ref_fasta_name)
+    return distance
 
 #will keep Q name, Q start, Q end, T name(s), Q spec, T specie(s), divergence time(s), ani
 
@@ -18,7 +39,7 @@ def compress(input_file):
     rows = set()
 
     with open(input_file, 'r') as f:
-        print("File", input_file, "opened")
+        #print("File", input_file, "opened")
         tsv = csv.reader(f, delimiter="\t")
         for line in tsv:
             if line[1].isnumeric():
@@ -103,9 +124,8 @@ def find_overlap(rows, output_file, blat_db, gtdb_index):
                 if "unclassified" in [species1, species2]:
                     id1 = row1[4]
                     id2 = row2[4]
-                    # goes to find_overlap_and_div.py
                     ani = find_ani_overlap(id1, id2, blat_db, gtdb_index)
-                    if ani != None and (type(ani) != str and ani < 95):
+                    if type(ani) != str and ani < 95:
                         new_row = build_overlap_row(row1, row2, new_start, new_end, ani)
                         new_rows.add(new_row)
                         used.add(rows[i])
@@ -114,14 +134,14 @@ def find_overlap(rows, output_file, blat_db, gtdb_index):
                 #if it overlaps and the species are not equal
                 elif species1 != species2 and "unclassified" not in [species1, species2]:
                     #There was no ani between species considered since they had dif names
-                    new_row = new_row = build_overlap_row(row1, row2, new_start, new_end, "NA")
+                    new_row = build_overlap_row(row1, row2, new_start, new_end, "NA")
                     new_rows.add(new_row)
                     used.add(rows[i])
                     used.add(rows[j])
                     break
 
     with open(output_file, "w") as out:
-        out.write("Q name\tQ size\tQ start\tQ end\tT name\tTsize\tQuery_Species\tReference_Species\tDivergence_Time\tANI_of_whole_seqs(only_if_div=unk)\tANI_bt_r_seqs(if_species_unk)\n")
+        out.write("Q name\tQ size\tQ start\tQ end\tT name\tTsize\tQuery Species\tReference Species\tDivergence Time\tANI bt seqs(if div=unk)\tANI bt ref seqs(if species unk)\n")
         for l in new_rows:
             out.write(l + "\n")
 

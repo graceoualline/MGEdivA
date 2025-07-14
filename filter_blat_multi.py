@@ -26,7 +26,7 @@ def filter_blat_multi(infiles, outf, q_species, kraken, tree, q_seq, blat_db):
     # Open output file once
     with open(outf, 'w') as outfile:
         # Write the header
-        outfile.write("match\tmismatch\trep. match\tN's\tQ gap count \t Q gap bases\tT gap count \tT gap bases\tstrand\tQ name\tQ size\tQ start\t Q end\tT name\tT size\tT start\tT end\tblock count\tblockSizes\tqStarts\ttStarts\tQuery_Species\tReference_Species\tDivergence_Time\tANI_of_whole_seqs(only_if_div=unk)\n")
+        outfile.write("match\tmismatch\trep. match\tN's\tQ gap count \t Q gap bases\tT gap count \tT gap bases\tstrand\tQ name\tQ size\tQ start\tQ end\tT name\tT size\tT start\tT end\tblock count\tblockSizes\tqStarts\ttStarts\tQuery Species\tReference Species\tDivergence Time\tANI bt seqs(if div=unk)\n")
         species_path_cache = {}
         species_path_cache["unclassified"] = "NA"
         # Process each input file line by line

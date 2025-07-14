@@ -10,12 +10,12 @@ import os
 def adjust_and_merge_tsvs(chunk_dir, chunk_size, output_file, to_combine):
     #ex to_combine = *blatdiver_output.tsv
     all_files = sorted(glob.glob(os.path.join(chunk_dir, "*" + to_combine)))
-    print(chunk_dir)
-    print(to_combine)
+    #print(chunk_dir)
+    #print(to_combine)
     dfs = []
     total_len = 0
     for filename in all_files:
-        print(filename)
+        #print(filename)
         file = filename.split("/")[-1]
         idx = int(file.split("_")[1])
         # Calculate chunk offset
@@ -23,25 +23,11 @@ def adjust_and_merge_tsvs(chunk_dir, chunk_size, output_file, to_combine):
 
         with open(filename, 'r') as f:
             first_line = f.readline()
-            has_header = not first_line.strip().split('\t')[0].isdigit()
-
-        try:
-            if has_header:
-                df = pd.read_csv(filename, sep='\t')
-            else:
-                df = pd.read_csv(filename, sep='\t', header=None)
-            
+            df = pd.read_csv(filename, sep='\t')
             total_len += len(df)
-        except:
-            #if theres an error with the df being made, just skip it
-            print(filename, "is empty")
-            continue
-        
-        if df.empty:
-            continue  # Skip empty chunks
 
-        # Assuming start is in column 2 and end is in column 3 (0-based)
-        #change these depending on what file it is
+        #if df.empty:
+        #    continue  # Skip empty chunks
         
         if df.shape[1] > 13:
             start_index = 11
@@ -54,27 +40,19 @@ def adjust_and_merge_tsvs(chunk_dir, chunk_size, output_file, to_combine):
             df.iloc[:, start_index] = pd.to_numeric(df.iloc[:, start_index], errors = 'coerce') + offset  # Adjust start
             df.iloc[:, end_index] = pd.to_numeric(df.iloc[:, end_index], errors = 'coerce') + offset  # Adjust end
 
-        dfs.append(df)
-        
+        dfs.append(df) 
         
     try:
         # Merge all
         final_df = pd.concat(dfs, ignore_index=True)
 
-        def is_misaligned(row):
-                # First two columns are blank but middle columns are not
-                return pd.isna(row[0]) and pd.isna(row[1]) and not pd.isna(row[10])
-
-        bad_rows = final_df[final_df.apply(is_misaligned, axis=1)]
-        print("Found misaligned rows:")
-        print(bad_rows.to_string(index=False))
-
         # Save
         final_df.to_csv(output_file, sep='\t', index=False)
         print(f"Combined file written to {output_file}")
-        print("Total length is", total_len)
+        #print("Total length is", total_len)
     except:
         print(f"There are no {to_combine} to combine")
+    return all_files
 
 if __name__ == "__main__":
     if len(sys.argv) != 5:

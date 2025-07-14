@@ -257,7 +257,7 @@ if __name__ == "__main__":
                 species = "unclassified"
             #if the sequence length is greater than the chunk size we want
         if seq_len > chunk_size:
-            for i in range(chunk_size, seq_len, chunk_size):
+            for i in range(0, seq_len, chunk_size):
                 #then we chunk it by size
                 chunk_seq = record.seq[i:i+chunk_size]
                 chunk_record = record[:0]  # copy header

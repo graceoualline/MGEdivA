@@ -19,28 +19,6 @@ def overlaps(start1, end1, start2, end2):
         return min(end1, end2) - max(start1, start2)
     return None
 
-
-def find_ani_overlap(q_id, ref_id, blat_db, kraken):
-    """
-    Finds the ANI between a query sequence and a reference sequence stored in a .2bit file.
-
-    Parameters:
-    - q_seq (str): Path to the query sequence (FASTA format).
-    - ref_id (str): The reference sequence ID to extract.
-    - blat_db (str): Path to the folder containing .2bit files.
-
-    Returns:
-    - float: ANI value (or None if reference is not found).
-    """
-    q_seq = extract_2bit_fasta(q_id, kraken, blat_db)
-    ref_fasta_name = extract_2bit_fasta(ref_id, kraken, blat_db)
-        
-    distance = calculate_distance(q_seq, ref_fasta_name)
-
-    os.remove(q_seq)
-    os.remove(ref_fasta_name)
-    return distance
-
 #if it finds regions that overlap and map to the same species, it will combine them
 
 def get_div_alt(path1, path2, tree):
@@ -48,7 +26,7 @@ def get_div_alt(path1, path2, tree):
     #path1 = get_path(sp1, tree)
     #print(sp1, sp2)
     if path1 == "NA" or path2 == "NA":
-        return None
+        return "unk:unable_to_find_ref_species_in_tree"
 
     distance = path1.get_distance(path2)
     
@@ -91,19 +69,19 @@ def find_overlap_and_div(rows, output_file, tree, blat_db, kraken):
             if overlaps(s1, e1, s2, e2) != None and (species1 != species2 or ("unclassified" in [species1, species2])):
                 #check if species are different enough first
                 if species2 not in species_path_cache:
-                    if species2 == "unclassified_Arthrobacter": print("overlap_div", output_file)
                     species_path_cache[species2] = get_path(species1, tree)
 
+                
                 div = get_div_alt(species_path_cache[species1], species_path_cache[species2], tree)
                 ani = "NA"
-                if div == None:
+                if type(div) == str:
                     #get the ani instead
                     id1 = row1[4]
                     id2 = row2[4]
                     ani = find_ani_overlap(id1, id2, blat_db, kraken) #make find_ani later
                     #print("ani calculated:", ani)
                    
-                if (div != None and div >= 1) or (type(ani) == int and ani < 95):
+                if (type(div) != str and div >= 1) or (type(ani) == int and ani < 95):
                     #print("merging rows")
                     new_row = []
                     new_start = max(s1, s2)
@@ -131,7 +109,7 @@ def find_overlap_and_div(rows, output_file, tree, blat_db, kraken):
             i += 1
 
     with open(output_file, "w") as out:
-        out.write("Q name\tQ size\tQ start\tQ end\tT name\tTsize\tQuery_Species\tReference_Species\tDivergence_Time_to_Q\tANI_of_whole_seqs(only_if_div=unk)\tDiv_bt_species\tAni_bt_species\n")
+        out.write("Q name\tQ size\tQ start\tQ end\tT name\tTsize\tQuery Species\tReference Species\tDivergence Time\tANI bt seqs(if div=unk)\tDiv bt ref species\tAni bt ref species\n")
         #if we do have new rows, then write them
         if len(new_rows) > 0:
             for l in new_rows:

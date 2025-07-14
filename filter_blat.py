@@ -39,7 +39,7 @@ def get_path(sp, tree):
                 for node in tree.traverse("preorder"):
                     if first[0] in node.name:
                         return node
-                print("sp not found", sp)
+                #print("sp not found", sp)
                 return "NA"
     return path
 
@@ -50,7 +50,7 @@ def get_div(path1, path2, tree):
     #path2 = get_path(sp2, tree)
     #print(sp1, sp2)
     if path1 == "NA" or path2 == "NA":
-        return None
+        return "unk:unable_to_find_ref_species_in_tree"
 
     distance = path1.get_distance(path2)
     
@@ -116,7 +116,6 @@ def calculate_distance(seq1, seq2):
         print(f"Error running skani: {e}")
         return "unk:skani_err"  # Return 0 in case of errors
 
-
 def extract_2bit_fasta(ref_id, kraken, blat_db):
     # Step 1: Identify which .2bit file contains the reference sequence
     ref_2bit_file = lookup_location(kraken, ref_id)
@@ -153,7 +152,7 @@ def find_ani(q_seq, ref_id, blat_db, kraken):
     os.remove(ref_fasta_name)
     return distance
 
-def filter_blat(inf, outf, q_species, kraken, tree, q_seq, blat_db):
+def filter_blat(inf, outf, q_species, kraken, tree, q_seq, blat_db, minIdentity):
     #get a df or array that converts all of the columns fomr input file .psl into something readable
     if q_species != "unclassified": path1 = get_path(q_species, tree)
     #write header of input file to putput file
@@ -161,7 +160,7 @@ def filter_blat(inf, outf, q_species, kraken, tree, q_seq, blat_db):
         # Write a new header to file that is tabulated and has our new guys on the end
         #we only care about query, sequence
         #outfile.write("match\tmismatch\trep. match\tN's\tQ gap count \t Q gap bases\tT gap count \tT gap bases\tstrand\tQ name\tQ size\tQ start\t Q end\tT name\tT size\tT start\tT end\tblock count\tblockSizes\tqStarts\ttStarts\tQuery_Species\tReference_Species\tDivergence_Time\n")
-        outfile.write("match\tmismatch\trep. match\tN's\tQ gap count \t Q gap bases\tT gap count \tT gap bases\tstrand\tQ name\tQ size\tQ start\t Q end\tT name\tT size\tT start\tT end\tblock count\tblockSizes\tqStarts\ttStarts\tQuery_Species\tReference_Species\tDivergence_Time\tANI_of_whole_seqs(only_if_div=unk)\n")
+        outfile.write("match\tmismatch\trep. match\tN's\tQ gap count \tQ gap bases\tT gap count\tT gap bases\tstrand\tQ name\tQ size\tQ start\t Q end\tT name\tT size\tT start\tT end\tblock count\tblockSizes\tqStarts\ttStarts\tPercent Identity\tQuery Species\tReference Species\tDivergence Time\tANI bt seqs(if div=unk)\n")
         species_path_cache = {}
         # Process each line in the BLAT file
         for line in infile:
@@ -172,14 +171,20 @@ def filter_blat(inf, outf, q_species, kraken, tree, q_seq, blat_db):
                 continue
             query_id = columns[9]  # Assuming query sequence ID is in the 10th column
             ref_id = columns[13]  # Assuming reference sequence ID is in the 14th column
-            
+            match = int(columns[0])
+            Qstart = int(columns[11])
+            Qend = int(columns[12])
+            perIdent = (match / (Qend-Qstart))*100
+
+            #skip this line if it doesnt meet the threshold
+            if perIdent < minIdentity:
+                continue
             # Get the species of the reference sequence using Kraken and grep
             ref_species = process_kraken(kraken, ref_id)
     
-            
             if ref_species is None:
-                print("ERROR, impossible that we cannot find a sequence that is in the GTDB")
-                assert(False)
+                print("ERROR, your index mapping database genomes to their species and locations was not made correctly.")
+                print(f"Unable to find the species for {ref_id} in {kraken}. Skipping.")
                 continue  # Skip this line if no species found for reference sequence
             if q_species == "unclassified" or ref_species == "unclassified" or path1 == None:
                 div = "unk:unclassified_species"
@@ -191,28 +196,27 @@ def filter_blat(inf, outf, q_species, kraken, tree, q_seq, blat_db):
             #print("div", div, q_species, ref_species)
             if div == None:
                 div = "unk:unable_to_find_ref_species_in_tree"
-                
+
+            ani = "NA" #ani is NA for now unless defined later
             if div == 0:
                 continue  # Skip lines with zero divergence time
-            elif type(div) == str:
-                #print("div unknown:", ani)
+            elif type(div) == str: #if div is unk, then find ani
                 ani = find_ani(q_seq, ref_id, blat_db, kraken) 
                 #print("ani calculated:", ani)
                 if type(ani) != str and ani >= 95:
                     continue #skip lines with 95 or more ani since that means they are same species
-            else:
-                ani = "NA"
+        
             
             # Write the line with the added divergence time, query species, and reference species
             new_line = columns #columns[9:]
             new_line = "\t".join(new_line)
-            outfile.write(new_line.strip() + f"\t{q_species}\t{ref_species}\t{div}\n")
+            outfile.write(new_line.strip() + f"\t{perIdent}\t{q_species}\t{ref_species}\t{div}\t{ani}\n")
 
 
 if __name__ == "__main__":
     # Check if the correct number of command-line arguments is provided
-    if len(sys.argv) != 8:
-        print("Usage: python3 filter_blat.py <input psl file> <output .tsv file> <query species (make sure _ instead of space)> <gtdb seq species index .pkl> <div tree> <input sequence> <blat db>")
+    if len(sys.argv) != 9:
+        print("Usage: python3 filter_blat.py <input psl file> <output .tsv file> <query species (make sure _ instead of space)> <gtdb seq species index .pkl> <div tree> <input sequence> <blat db> <minIdentity>")
         sys.exit(1)
 
     # Usage example:
@@ -224,7 +228,8 @@ if __name__ == "__main__":
     q_seq = sys.argv[6]
     blat_db = sys.argv[7]
     kraken = load_hash_table(kraken)
-    filter_blat(input_file, output_file, q_species, kraken, tree, q_seq, blat_db)
+    minIdentity = sys.argv[8]
+    filter_blat(input_file, output_file, q_species, kraken, tree, q_seq, blat_db, minIdentity)
     
 
 #kraken = /usr1/shared/all_gtdb_id_and_kraken_species.txt
