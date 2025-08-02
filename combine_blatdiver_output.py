@@ -15,7 +15,7 @@ def adjust_and_merge_tsvs(chunk_dir, chunk_size, output_file, to_combine):
     dfs = []
     total_len = 0
     for filename in all_files:
-        #print(filename)
+        #print(f"Reading file: {filename}")
         file = filename.split("/")[-1]
         idx = int(file.split("_")[1])
         # Calculate chunk offset
@@ -23,13 +23,17 @@ def adjust_and_merge_tsvs(chunk_dir, chunk_size, output_file, to_combine):
 
         with open(filename, 'r') as f:
             first_line = f.readline()
-            df = pd.read_csv(filename, sep='\t')
+            try:
+                df = pd.read_csv(filename, sep='\t')
+            except:
+                df = pd.read_csv(filename, sep='\t', on_bad_lines='skip')
+                print(f"Warning, {filename} has malformed lines.")
             total_len += len(df)
 
         #if df.empty:
         #    continue  # Skip empty chunks
         
-        if df.shape[1] > 13:
+        if df.shape[1] > 15:
             start_index = 11
             end_index = 12
         else:

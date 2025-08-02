@@ -34,8 +34,13 @@ def get_div_alt(path1, path2, tree):
 
 
 def find_overlap_and_div(rows, output_file, tree, blat_db, kraken):
+    #"Q name\tQ size\tQ start\tQ end\tT name\tT size\tT start\tT end\tPercent Identity\tQuery Species\tReference Species\tDivergence Time\tANI bt seqs(if div=unk)\tANI bt ref seqs(if species unk)\n")
+    qs = 2 #q start is 2
+    qe = 3 # qend is 3
+    rsp = 10 #ref species is 7
+    tname = 4
     new_rows = set()
-    rows = sorted(list(rows), key=lambda x:int(x[2]))
+    rows = sorted(list(rows), key=lambda x:int(x[qs]))
     used = set()
     species_path_cache = {}
     species_path_cache["unclassified"] = "NA"
@@ -46,7 +51,7 @@ def find_overlap_and_div(rows, output_file, tree, blat_db, kraken):
             i += 1
             continue
 
-        s1, e1, species1, row1 = int(rows[i][2]), int(rows[i][3]), rows[i][7], rows[i]
+        s1, e1, species1, row1 = int(rows[i][qs]), int(rows[i][qe]), rows[i][rsp], rows[i]
         # Cache species path
         if species1 not in species_path_cache:
             #if species1 == "unclassified_Arthrobacter": print("overlap_div", output_file)
@@ -57,7 +62,7 @@ def find_overlap_and_div(rows, output_file, tree, blat_db, kraken):
         merged = False
 
         while j < len(rows):
-            s2, e2, species2, row2 = int(rows[j][2]), int(rows[j][3]), rows[j][7], rows[j]
+            s2, e2, species2, row2 = int(rows[j][qs]), int(rows[j][qe]), rows[j][rsp], rows[j]
             if row2 in used:
                 j += 1
                 continue
@@ -76,8 +81,8 @@ def find_overlap_and_div(rows, output_file, tree, blat_db, kraken):
                 ani = "NA"
                 if type(div) == str:
                     #get the ani instead
-                    id1 = row1[4]
-                    id2 = row2[4]
+                    id1 = row1[tname]
+                    id2 = row2[tname]
                     ani = find_ani_overlap(id1, id2, blat_db, kraken) #make find_ani later
                     #print("ani calculated:", ani)
                    
@@ -87,12 +92,10 @@ def find_overlap_and_div(rows, output_file, tree, blat_db, kraken):
                     new_start = max(s1, s2)
                     new_end = min(e1, e2)
                     for h in range(len(row1)):
-                        if h in [0, 1, 6]: #0 and 1 are q name and length, and 5 is q species
+                        if h in [0, 1, rsp]: #0 and 1 are q name and length, and q species
                             new_row.append(row1[h])
-                        elif h == 2: #put new start or end
-                            new_row.append(str(new_start))
-                        elif h==3: # put in new end
-                            new_row.append(str(new_end))
+                        elif h == 2: new_row.append(str(new_start)) #put new start or end
+                        elif h==3: new_row.append(str(new_end)) # put in new end
                         else:
                             new_row.append(f"{row1[h]},{row2[h]}")
                     new_row.append(f"{div}")
@@ -109,13 +112,12 @@ def find_overlap_and_div(rows, output_file, tree, blat_db, kraken):
             i += 1
 
     with open(output_file, "w") as out:
-        out.write("Q name\tQ size\tQ start\tQ end\tT name\tTsize\tQuery Species\tReference Species\tDivergence Time\tANI bt seqs(if div=unk)\tDiv bt ref species\tAni bt ref species\n")
+                 #"Q name\tQ size\tQ start\tQ end\tT name\tT size\tT start\tT end\tPercent Identity\tQuery Species\tReference Species\tDivergence Time\tANI bt seqs(if div=unk)
+        out.write("Q name\tQ size\tQ start\tQ end\tT name\tT size\tT start\tT end\tPercent Identity\tQuery Species\tReference Species\tDivergence Time\tANI bt seqs(if div=unk)\tDiv bt ref species\tAni bt ref species\n")
         #if we do have new rows, then write them
         if len(new_rows) > 0:
             for l in new_rows:
                 out.write(l + "\n")
-    #print("number of lines before filter:", len(rows))
-    #print("number of lines after overlap:", len(new_rows))
 
 if __name__ == "__main__":
     # Check if the correct number of command-line arguments is provided

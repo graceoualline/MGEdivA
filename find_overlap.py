@@ -36,6 +36,10 @@ def overlaps(start1, end1, start2, end2):
 
 #if it finds regions that overlap and map to the same species, it will combine them
 def compress(input_file):
+    #"Q name\tQ size\tQ start\tQ end\tT name\tT size\tT start\tT end\tPercent Identity\tQuery Species\tReference Species\tDivergence Time\tANI bt seqs(if div=unk)\tANI bt ref seqs(if species unk)\n")
+    qs = 2 #q start is 2
+    qe = 3 # qend is 3
+    rsp = 10 #ref species is 7
     rows = set()
 
     with open(input_file, 'r') as f:
@@ -43,10 +47,11 @@ def compress(input_file):
         tsv = csv.reader(f, delimiter="\t")
         for line in tsv:
             if line[1].isnumeric():
-                care = line[9:15] + line[21:] #q name to ref Name
+                care = line[9:17] + line[21:] #q name to ref Name
                 rows.add(tuple(care))
 
-    rows = sorted(list(rows), key=lambda x: (int(x[2]), int(x[3])))
+    #sort them by Qstart and Qend
+    rows = sorted(list(rows), key=lambda x: (int(x[qs]), int(x[qe])))
     compressed = []
     #if there is no one, then return nothing
     if not rows:
@@ -54,16 +59,17 @@ def compress(input_file):
 
     #Initialize first merged interval
     i = 0
-    s_cur, e_cur, species_cur, row_cur = int(rows[i][2]), int(rows[i][3]), rows[i][7], list(rows[i])
+    
+    s_cur, e_cur, species_cur, row_cur = int(rows[i][qs]), int(rows[i][qe]), rows[i][rsp], list(rows[i])
     while species_cur == "unclassified" and i < len(rows):
         # add those whose species is unknown
         compressed.append(tuple(row_cur))
         i += 1
-        s_cur, e_cur, species_cur, row_cur = int(rows[i][2]), int(rows[i][3]), rows[i][7], list(rows[i])
+        s_cur, e_cur, species_cur, row_cur = int(rows[i][qs]), int(rows[i][qe]), rows[i][rsp], list(rows[i])
         
     
     for row in rows[i:]:
-        s2, e2, species2, row2 = int(row[2]), int(row[3]), row[7], list(row)
+        s2, e2, species2, row2 = int(row[qs]), int(row[qe]), row[rsp], list(row)
         # if this new species is unclassified, just add it and move on
         if species2 == "unclassified":
             compressed.append(tuple(row2))
@@ -72,10 +78,10 @@ def compress(input_file):
         #if it does not overlap or does not share the same species, start the next merge
         if species2 != species_cur or not overlaps(s_cur, e_cur, s2, e2):
             #update this row to be the new values of the new end
-            row_cur[3] = str(e_cur)
+            row_cur[qe] = str(e_cur)
             compressed.append(tuple(row_cur))
             #start a new current fam
-            s_cur, e_cur, species_cur, row_cur = int(row[2]), int(row[3]), row[7], list(row)
+            s_cur, e_cur, species_cur, row_cur = int(row[qs]), int(row[qe]), row[rsp], list(row)
         elif species2 == species_cur and overlaps(s_cur, e_cur, s2, e2):
             #then update the end
             e_cur = max(e_cur, e2)
@@ -84,7 +90,7 @@ def compress(input_file):
             assert(False)
 
     # add the final interval
-    row_cur[3] = str(e_cur)
+    row_cur[qe] = str(e_cur)
     compressed.append(tuple(row_cur))
     #print(compressed)
     return compressed
@@ -92,7 +98,7 @@ def compress(input_file):
 def build_overlap_row(row1, row2, new_start, new_end, ani_value):
     new_row = []
     for h in range(len(row1)):
-        if h in [0, 1, 6]:  # qname, rname, q_species
+        if h in [0, 1, 9]:  # qname, rname, q_species
             new_row.append(row1[h])
         elif h == 2:
             new_row.append(str(new_start))
@@ -104,20 +110,23 @@ def build_overlap_row(row1, row2, new_start, new_end, ani_value):
     return "\t".join(new_row)
 
 def find_overlap(rows, output_file, blat_db, gtdb_index):
+    qs = 2 #q start is 2
+    qe = 3 # qend is 3
+    rsp = 10 #ref species is 7
     new_rows = set()
-    rows = sorted(rows, key=lambda x: (int(x[2]), int(x[3])))
+    rows = sorted(rows, key=lambda x: (int(x[qs]), int(x[qe])))
     used = set()
     for i in range(len(rows)):
         if rows[i] in used:
             continue
-        s1, e1, species1, row1 = int(rows[i][2]), int(rows[i][3]), rows[i][7], rows[i]
+        s1, e1, species1, row1 = int(rows[i][qs]), int(rows[i][qe]), rows[i][rsp], rows[i]
         #find the row with the most overlap that does not share a species
         for j in range(i+1, len(rows)):
             #print("j", j)
             if rows[j] in used:
                 continue
 
-            s2, e2, species2, row2 = int(rows[j][2]), int(rows[j][3]), rows[j][7], rows[j]
+            s2, e2, species2, row2 = int(rows[j][qs]), int(rows[j][qe]), rows[j][rsp], rows[j]
             new_start, new_end = max(s1, s2), min(e1, e2)
 
             if overlaps(s1, e1, s2, e2):
@@ -141,7 +150,7 @@ def find_overlap(rows, output_file, blat_db, gtdb_index):
                     break
 
     with open(output_file, "w") as out:
-        out.write("Q name\tQ size\tQ start\tQ end\tT name\tTsize\tQuery Species\tReference Species\tDivergence Time\tANI bt seqs(if div=unk)\tANI bt ref seqs(if species unk)\n")
+        out.write("Q name\tQ size\tQ start\tQ end\tT name\tT size\tT start\tT end\tPercent Identity\tQuery Species\tReference Species\tDivergence Time\tANI bt seqs(if div=unk)\tANI bt ref seqs(if species unk)\n")
         for l in new_rows:
             out.write(l + "\n")
 

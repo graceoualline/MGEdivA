@@ -35,12 +35,12 @@ class Config:
     tree: str # the time tree of life tree
     remove: bool # is false when I am debugging and dont want files to be deleted
     species: str # user defined species of all of the sequences given in a query
-    minScore: int # Is the minimum alignment score threshold, sets blat's parameter -minScore, default 50
+    minScore: int # Is the minimum alignment score threshold, sets blat's parameter -minScore, default 30
     minIdentity: int # Is the threshold of the minimum percent identity a hit must have. Default: 95. Percent identity = ( match / Q_end - Q_start )*100
 
 def combine_and_cleanup_psl_files(args):
     header_lines = 5
-    output_chunk_dir, combined_path, c = args
+    output_chunk_dir, combined_path, remove = args
 
     if os.path.exists(combined_path):
         print(f"Skipping {combined_path}, already exists.")
@@ -54,16 +54,18 @@ def combine_and_cleanup_psl_files(args):
                     lines = infile.readlines()
                     # Now find where the alignment lines begin
                     outfile.writelines(lines[header_lines:])
-                if c.remove: os.remove(fname)
-        if c.remove: os.rmdir(output_chunk_dir)
+                if remove: os.remove(fname)
+        if remove: os.rmdir(output_chunk_dir)
 
         #print(f"Combined {len(input_files)} files into {combined_path}.")
 
 def run_div_filter(job):
-    chunk_record, idx, original_id, species, tmp_fasta_path, all_blat_raw, output_file, c = job
+    all_blat_raw, output_file, species, index, tree, tmp_fasta_path, database, minIdentity = job
+    index = load_hash_table(index)
+    print("running", all_blat_raw)
     try:
         #run the first round of filtering on the raw blat data
-        filter_blat(all_blat_raw, output_file, species, c.index, c.tree, tmp_fasta_path, c.database)
+        filter_blat(all_blat_raw, output_file, species, index, tree, tmp_fasta_path, database, minIdentity)
     except subprocess.CalledProcessError as e:
         print(f"Error running filter_blat on chunk {output_file}:\n{e.stderr.decode().strip()}")
     return 1
@@ -72,48 +74,20 @@ def run_specified_filter(job):
     """Dispatch the correct function based on job type."""
     job_type, args = job
     try:
-        if job_type == "no_gaps":
-            to_filter_file, gap_file = args
-            remove_large_gaps(to_filter_file, gap_file)
-        elif job_type == "overlap":
-            infile, outfile, c = args
+        if job_type == "overlap":
+            infile, outfile, database, index = args
+            index = load_hash_table(index)
+            print("overlap", outfile)
             rows = compress(infile)
-            find_overlap(rows, outfile, c.database, c.index)
+            find_overlap(rows, outfile, database, index)
         elif job_type == "overlap_div":
-            to_filter_file, overlap_div_file, c = args
+            to_filter_file, overlap_div_file, tree, database, index = args
+            index = load_hash_table(index)
+            print("overlap_div", overlap_div_file)
             rows = compress(to_filter_file)
-            find_overlap_and_div(rows, overlap_div_file, c.tree, c.database, c.index)
+            find_overlap_and_div(rows, overlap_div_file, tree, database, index)
     except subprocess.CalledProcessError as e:
         print(f"[{job_type}] Error on {args[1] if len(args) > 1 else 'unknown'}:\n{e.stderr.decode().strip()}")
-    return 1
-
-def run_no_gaps(job):
-    to_filter_file, gap_file = job
-    try:
-        #run the first round of filtering on the blatdiver output
-        remove_large_gaps(to_filter_file, gap_file)
-    except subprocess.CalledProcessError as e:
-        print(f"Error running no_gaps on {gap_file}:\n{e.stderr.decode().strip()}")
-    return 1
-
-def run_overlap(job):
-    to_filter_file, overlap_output_file, c = job
-    try:
-        #run the first round of filtering on the blatdiver output
-        rows = compress(to_filter_file)
-        find_overlap(rows, overlap_output_file, c.database, c.index)
-    except subprocess.CalledProcessError as e:
-        print(f"Error running overlap on {overlap_output_file}\n{e.stderr.decode().strip()}")
-    return 1
-
-def run_overlap_div(job):
-    to_filter_file, overlap_div_file, c = job
-    try:
-        #run the first round of filtering on the blatdiver output
-        rows = compress(to_filter_file)
-        find_overlap_and_div(rows, overlap_div_file, c.tree, c.database, c.index)
-    except subprocess.CalledProcessError as e:
-        print(f"Error running overlap div on {overlap_div_file}:\n{e.stderr.decode().strip()}")
     return 1
 
 def run_all_filters(chunk_jobs, c: Config):
@@ -125,7 +99,7 @@ def run_all_filters(chunk_jobs, c: Config):
         
         #make one big file that combines all of the blat outputs
         all_blat_raw = os.path.join(c.output_dir, f"chunk_{idx}_{original_id}_blat_output.tsv")
-        if not(os.path.exists(all_blat_raw)): blat_combine_jobs.append((output_chunk_dir, all_blat_raw, c))
+        if not(os.path.exists(all_blat_raw)): blat_combine_jobs.append((output_chunk_dir, all_blat_raw, c.remove))
         
         #then filter all blat results and add divergence or ani
         output_file = os.path.join(c.output_dir, f"chunk_{idx}_{original_id}_blatdiver_output.tsv")
@@ -140,13 +114,12 @@ def run_all_filters(chunk_jobs, c: Config):
                     pbar.update()
     print("Finished combining blat data.")
     
-    
     #run divergence filter
     div_jobs = []
     for j in jobs:
         chunk_record, idx, original_id, species, tmp_fasta_path, all_blat_raw, output_file, c = j
         if os.path.exists(output_file): print(f"Skipping {output_file}, already exists.")
-        else: div_jobs.append(j)
+        else: div_jobs.append((all_blat_raw, output_file, species, c.index, c.tree, tmp_fasta_path, c.database, c.minIdentity))
     if len(div_jobs) > 0:
         #print whatever command you are running
         with Pool(processes=c.max_threads) as pool:
@@ -156,24 +129,7 @@ def run_all_filters(chunk_jobs, c: Config):
                     pbar.update()
     print("Finished running divergence filter.")
 
-    #do gap jobs
-    gap_jobs = []
-    for j in jobs:
-        chunk_record, idx, original_id, species, tmp_fasta_path, all_blat_raw, output_file, c = j
-        gaps = os.path.join(c.output_dir, f"chunk_{idx}_{original_id}_no_gaps.tsv")
-        if os.path.exists(gaps): print(f"Skipping {gaps}, already exists.")
-        else: gap_jobs.append(("no_gaps", (output_file, gaps)))
-    if len(gap_jobs) > 0:
-        #print whatever command you are running
-        with Pool(processes=c.max_threads) as pool:
-            #Progress bar
-            with tqdm(total=len(gap_jobs), desc="Running chunks through no gaps filter") as pbar:
-                for _ in pool.imap_unordered(run_specified_filter, gap_jobs):
-                    pbar.update()
-    print("Finished running no gaps filter")
-
-
-    #run overlap, overlap_div, overlap_gav, overlap_gap_div filters
+    #run overlap, overlap_div filters
     filter_jobs = []
     for j in jobs:
         chunk_record, idx, original_id, species, tmp_fasta_path, all_blat_raw, blatdiver_output_file, c = j
@@ -181,44 +137,34 @@ def run_all_filters(chunk_jobs, c: Config):
         #overlap filter
         overlap = os.path.join(c.output_dir, f"chunk_{idx}_{original_id}_overlap.tsv")
         if os.path.exists(overlap): print(f"Skipping {overlap}, already exists.")
-        else: filter_jobs.append(("overlap", (blatdiver_output_file, overlap, c)))
+        else: filter_jobs.append(("overlap", (blatdiver_output_file, overlap, c.database, c.index)))
 
         # overlap div filter
-        overlap_div = os.path.join(c.output_dir, f"chunk_{idx}_{original_id}_filtered_overlap_div.tsv")
+        overlap_div = os.path.join(c.output_dir, f"chunk_{idx}_{original_id}_overlap_div.tsv")
         if os.path.exists(overlap_div): print(f"Skipping {overlap_div}, already exists.")
-        else: filter_jobs.append(("overlap_div", (blatdiver_output_file, overlap_div, c)))
-
-        chunk_record, idx, original_id, species, tmp_fasta_path, all_blat_raw, output_file, c = j
-        gap = os.path.join(c.output_dir, f"chunk_{idx}_{original_id}_no_gaps.tsv")
-
-        #overlap_gap filter
-        overlap_gap = os.path.join(c.output_dir, f"chunk_{idx}_{original_id}_overlap_gap.tsv")
-        if os.path.exists(overlap_gap): print(f"Skipping {overlap_gap}, already exists.")
-        else: filter_jobs.append(("overlap", (gap, overlap_gap, c)))
-        # overlap div gap filter
-        overlap_div_gap = os.path.join(c.output_dir, f"chunk_{idx}_{original_id}_no_gap_overlap_div.tsv")
-        if os.path.exists(overlap_div_gap): print(f"Skipping {overlap_div_gap}, already exists.")
-        else: filter_jobs.append(("overlap_div", (gap, overlap_div_gap, c)))
+        else: filter_jobs.append(("overlap_div", (blatdiver_output_file, overlap_div, c.tree, c.database, c.index)))
     
     #run this first round of filtering
     if len(filter_jobs) > 0:
         with Pool(processes=c.max_threads) as pool:
             #Progress bars
-            with tqdm(total=len(filter_jobs), desc="Running chunks through overlap, overlap div, overlap gap, and overlap_gap_div filters") as pbar:
+            with tqdm(total=len(filter_jobs), desc="Running chunks through overlap, overlap div, filters") as pbar:
                 for _ in pool.imap_unordered(run_specified_filter, filter_jobs):
                     pbar.update()
     print("All filters complete")
     
 def run_blat(args):
-    blat_dir, blat_file, ooc_file, query, output_path, c = args
+    blat_dir, blat_file, ooc_file, query, output_path, minScore = args
     # Construct the command
+    
     command = (
         f"blat {blat_dir / blat_file} {query} "
-        f"-ooc={blat_dir / ooc_file} -tileSize=11 -minScore={c.minScore}"
+        f"-ooc={blat_dir / ooc_file} -tileSize=11 -minScore={minScore} "
         f"{output_path} -q=dna -t=dna"
     )
     try:
         #run the command
+        #print(command)
         if os.path.exists(output_path): print(f"{output_path} skipped, already exists")
         else: 
             #print("Running", command)
@@ -246,9 +192,10 @@ def run_blat_on_chunk(chunk_jobs, blat_files, ooc_files, c: Config):
             for i in range(num_blat_db):
                 output_path = f"chunk_{idx}_{original_id}_part_{i}.psl"
                 output_path = os.path.join(output_chunk, output_path)
-                jobs.append((c.database, blat_files[i], ooc_files[i], tmp_fasta_path, output_path, c))
+                jobs.append((c.database, blat_files[i], ooc_files[i], tmp_fasta_path, output_path, c.minScore))
     if len(jobs) > 0:
         #print whatever command you are running
+        print("THREADS", c.max_threads, type(c.max_threads))
         with Pool(processes=c.max_threads) as pool:
             #Progress bar
             with tqdm(total=len(jobs), desc="Running Sequences through BLAT") as pbar:
@@ -256,13 +203,15 @@ def run_blat_on_chunk(chunk_jobs, blat_files, ooc_files, c: Config):
                     pbar.update()
 
 def run_combine_results(job):
-    output_dir, chunk_size, to_combine, output_path, c = job
+    output_dir, chunk_size, to_combine, output_path, remove = job
     try: 
         to_remove = adjust_and_merge_tsvs(output_dir, chunk_size, output_path, to_combine)
-        if c.remove: 
+        if remove: 
             for f in to_remove: os.remove(f)
     except subprocess.CalledProcessError as e:
         print(f"Error combining results {output_path}: {e}")
+    print("Done")
+    return 1
 
 def combine_all_results(c: Config):
     #once all jobs are finished, combine all of the filters into one place:
@@ -270,17 +219,14 @@ def combine_all_results(c: Config):
     output_name = os.path.basename(c.output_dir)
     #python3 combine_blatdiver_output.py <blatdiver_output_directory> <chunk_size> <which files to combine ex. *blatdiver_output.tsv> <output_file>
     input_output = [("blat_output.tsv", os.path.join(c.output_dir, f"{output_name}_blat_results.tsv")),
-                    ("filtered_overlap_div.tsv", os.path.join(c.output_dir, f"{output_name}_overlap_div.tsv")), 
+                    ("overlap_div.tsv", os.path.join(c.output_dir, f"{output_name}_overlap_div.tsv")), 
                     ("blatdiver_output.tsv", os.path.join(c.output_dir, f"{output_name}_blatdiver_output.tsv")),
-                    ("no_gap_overlap_div.tsv", os.path.join(c.output_dir, f"{output_name}_no_gaps_overlap_div.tsv")),
-                    ("no_gaps.tsv", os.path.join(c.output_dir, f"{output_name}_no_gaps.tsv")), 
-                    ("overlap_gap.tsv", os.path.join(c.output_dir, f"{output_name}_overlap_gap.tsv")),
                     ("overlap.tsv", os.path.join(c.output_dir, f"{output_name}_overlap.tsv"))]
 
     jobs = []
     for to_combine, output in input_output:
         output_path = os.path.join(parent_dir, output)
-        if not os.path.exists(output_path): jobs.append((c.output_dir, c.chunk_size, to_combine, output_path, c))
+        if not os.path.exists(output_path): jobs.append((c.output_dir, c.chunk_size, to_combine, output_path, c.remove))
     if len(jobs) > 0:
         #print whatever command you are running
         with Pool(processes=c.max_threads) as pool:
@@ -307,7 +253,7 @@ def prepare_jobs(c:Config):
                 print("Issue extracting species for", record[:0])
                 species = "unclassified"
         else: species = c.species
-        print("Species:", species)
+        print(f"Species of {record.id}:", species)
         #if the sequence length is greater than the chunk size we want
         if seq_len > c.chunk_size:
             for i in range(0, seq_len, c.chunk_size):
@@ -365,7 +311,7 @@ def parse_args():
     parser.add_argument(
         "-minScore", type = int, help = "Is the minimum alignment score threshold, sets blat's parameter -minScore, default 50")
     parser.add_argument(
-        "-minIdentity", type = int, help = "Is the threshold of the minimum percent identity a hit must have. Default: 95. Percent identity = ( match / Q_end - Q_start )*100")
+        "-minIdentity", type = int, help = "Is the threshold of the minimum percent identity a hit must have. Default: 0. Percent identity = ( match / Q_end - Q_start )*100")
 
     return parser.parse_args()
 
@@ -375,15 +321,15 @@ def main():
     input_fasta=args.query,
     chunk_size=args.chunk if args.chunk else 100000,
     output_dir=args.output,
-    database=Path(args.database),
-    index=load_hash_table(args.index),
+    database = Path(args.database),
+    index = args.index,
     max_threads=args.threads if args.threads else 1,
-    kraken_db=args.kraken,
-    tree= Tree(args.tree),
+    kraken_db = args.kraken,
+    tree = Tree(args.tree),
     remove = bool(args.remove) if args.remove == 0 else True,
     species = args.species if args.species else None,
-    minScore = args.minScore if args.minScore else 50,
-    minIdentity = args.minIdentity if args.minIdentity else 95
+    minScore = args.minScore if args.minScore else 30,
+    minIdentity = args.minIdentity if args.minIdentity else 0
     )
 
     if not os.path.exists(c.output_dir):

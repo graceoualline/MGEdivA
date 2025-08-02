@@ -174,7 +174,7 @@ def filter_blat(inf, outf, q_species, kraken, tree, q_seq, blat_db, minIdentity)
             match = int(columns[0])
             Qstart = int(columns[11])
             Qend = int(columns[12])
-            perIdent = (match / (Qend-Qstart))*100
+            perIdent = round((match / (Qend-Qstart))*100, 5)
 
             #skip this line if it doesnt meet the threshold
             if perIdent < minIdentity:
