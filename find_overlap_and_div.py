@@ -100,7 +100,7 @@ def find_overlap_and_div(rows, output_file, tree, blat_db, kraken):
                             new_row.append(f"{row1[h]},{row2[h]}")
                     new_row.append(f"{div}")
                     new_row.append(f"{ani}")
-                    #print(i, j, "merged")
+                    print(i, j, "merged")
                     used.add(rows[i])
                     used.add(rows[j])
                     new_rows.add("\t".join(new_row))

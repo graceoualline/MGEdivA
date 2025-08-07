@@ -85,8 +85,6 @@ def run_specified_filter(job):
             index = load_hash_table(index)
             print("overlap_div", overlap_div_file)
             rows = compress(to_filter_file)
-            print("compressed", len(rows))
-            print(to_filter_file, overlap_div_file)
             find_overlap_and_div(rows, overlap_div_file, tree, database, index)
     except subprocess.CalledProcessError as e:
         print(f"[{job_type}] Error on {args[1] if len(args) > 1 else 'unknown'}:\n{e.stderr.decode().strip()}")
@@ -109,10 +107,14 @@ def run_all_filters(chunk_jobs, c: Config):
 
     #first, combine all blat files
     if len(blat_combine_jobs) > 0:
-        with Pool(processes=c.max_threads) as pool:
-            #Progress bar
+        with ProcessPoolExecutor(max_workers=c.max_threads) as executor:
+            # Submit all jobs and get futures
+            futures = [executor.submit(combine_and_cleanup_psl_files, job) for job in blat_combine_jobs]
+            
+            # Track progress as they complete
             with tqdm(total=len(blat_combine_jobs), desc="Combining blat data") as pbar:
-                for _ in pool.imap_unordered(combine_and_cleanup_psl_files, blat_combine_jobs):
+                for future in as_completed(futures):
+                    future.result()  # Get result (and raise any exceptions)
                     pbar.update()
     print("Finished combining blat data.")
     
@@ -159,15 +161,22 @@ def run_blat(args):
     blat_dir, blat_file, ooc_file, query, output_path, minScore = args
     # Construct the command
     
-    command = (
-        f"blat {blat_dir / blat_file} {query} "
-        f"-ooc={blat_dir / ooc_file} -tileSize=11 -minScore={minScore} "
-        f"{output_path} -q=dna -t=dna"
-    )
+    command = [
+        "blat",
+        str(blat_dir / blat_file),
+        query,
+        f"-ooc={blat_dir / ooc_file}",
+        "-tileSize=11", 
+        f"-minScore={minScore}",
+        output_path,
+        "-q=dna",
+        "-t=dna"
+        ]
+
     try:
         #run the command
         #print(command)
-        subprocess.run(command, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, check=True)
+        subprocess.run(command, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, check=True)
     except subprocess.CalledProcessError as e:
         print(f"Error running BLAT on {output_path}:\n{e.stderr.decode().strip()}")
     return 1
@@ -191,9 +200,7 @@ def run_blat_on_chunk(chunk_jobs, blat_files, ooc_files, c: Config):
             for i in range(num_blat_db):
                 output_path = f"chunk_{idx}_{original_id}_part_{i}.psl"
                 output_path = os.path.join(output_chunk, output_path)
-                if os.path.exists(output_path): print(f"{output_path} skipped, already exists")
-                else:
-                    jobs.append((c.database, blat_files[i], ooc_files[i], tmp_fasta_path, output_path, c.minScore))
+                jobs.append((c.database, blat_files[i], ooc_files[i], tmp_fasta_path, output_path, c.minScore))
     if len(jobs) > 0:
         #print whatever command you are running
         print("THREADS", c.max_threads, type(c.max_threads))
