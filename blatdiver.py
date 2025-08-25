@@ -9,10 +9,12 @@
 import os
 import tempfile
 import subprocess
+import multiprocessing as mp
 from multiprocessing import Pool, cpu_count
 from Bio import SeqIO
 from blat_main import *
 from datetime import datetime
+from functools import partial
 from extract_species_from_kraken import *
 import argparse
 from tqdm import tqdm
@@ -107,44 +109,64 @@ def run_all_filters(chunk_jobs, c: Config):
         output_file = os.path.join(c.output_dir, f"chunk_{idx}_{original_id}_blatdiver_output.tsv")
         jobs.append((chunk_record, idx, original_id, species, tmp_fasta_path, all_blat_raw, output_file, c))
 
+    output_name = os.path.basename(c.output_dir)
+    blat_final_name = os.path.join(c.output_dir, f"{output_name}_blat_results.tsv")
+    overlap_div_final_name = os.path.join(c.output_dir, f"{output_name}_overlap_div.tsv")
+    blatdiver_final_name = os.path.join(c.output_dir, f"{output_name}_blatdiver_output.tsv")
+    overlap_final_name = os.path.join(c.output_dir, f"{output_name}_overlap.tsv")
+    
     #first, combine all blat files
-    if len(blat_combine_jobs) > 0:
-        with Pool(processes=c.max_threads) as pool:
-            #Progress bar
-            with tqdm(total=len(blat_combine_jobs), desc="Combining blat data") as pbar:
-                for _ in pool.imap_unordered(combine_and_cleanup_psl_files, blat_combine_jobs):
-                    pbar.update()
-    print("Finished combining blat data.")
+    if os.path.exists(blat_final_name): print(f"Skipping {blat_final_name}, already exists.")
+    else:
+        if len(blat_combine_jobs) > 0:
+            with Pool(processes=c.max_threads) as pool:
+                #Progress bar
+                with tqdm(total=len(blat_combine_jobs), desc="Combining blat data") as pbar:
+                    for _ in pool.imap_unordered(combine_and_cleanup_psl_files, blat_combine_jobs):
+                        pbar.update()
+        print("Finished combining blat data.")
     
     #run divergence filter
     div_jobs = []
-    for j in jobs:
-        chunk_record, idx, original_id, species, tmp_fasta_path, all_blat_raw, output_file, c = j
-        if os.path.exists(output_file): print(f"Skipping {output_file}, already exists.")
-        else: div_jobs.append((all_blat_raw, output_file, species, c.index, c.tree, tmp_fasta_path, c.database, c.minIdentity))
-    if len(div_jobs) > 0:
-        #print whatever command you are running
-        with Pool(processes=c.max_threads) as pool:
-            #Progress bar
-            with tqdm(total=len(div_jobs), desc="Running chunks through first divergence filter") as pbar:
-                for _ in pool.imap_unordered(run_div_filter, div_jobs):
-                    pbar.update()
-    print("Finished running divergence filter.")
+    if os.path.exists(blatdiver_final_name): print(f"Skipping {blatdiver_final_name}, already exists.")
+    else:
+        for j in jobs:
+            chunk_record, idx, original_id, species, tmp_fasta_path, all_blat_raw, output_file, c = j
+            if os.path.exists(output_file): print(f"Skipping {output_file}, already exists.")
+            else: div_jobs.append((all_blat_raw, output_file, species, c.index, c.tree, tmp_fasta_path, c.database, c.minIdentity))
+        if len(div_jobs) > 0:
+            #print whatever command you are running
+            with Pool(processes=c.max_threads) as pool:
+                #Progress bar
+                with tqdm(total=len(div_jobs), desc="Running chunks through first divergence filter") as pbar:
+                    for _ in pool.imap_unordered(run_div_filter, div_jobs):
+                        pbar.update()
+        print("Finished running divergence filter.")
 
     #run overlap, overlap_div filters
+    make_overlap = True
+    make_overlap_div = True
+    if os.path.exists(overlap_final_name): 
+        print(f"Skipping {overlap_final_name}, already exists.")
+        make_overlap = False
+    if os.path.exists(overlap_div_final_name): 
+        print(f"Skipping {overlap_div_final_name}, already exists.")
+        make_overlap_div = False
     filter_jobs = []
     for j in jobs:
         chunk_record, idx, original_id, species, tmp_fasta_path, all_blat_raw, blatdiver_output_file, c = j
 
         #overlap filter
-        overlap = os.path.join(c.output_dir, f"chunk_{idx}_{original_id}_overlap.tsv")
-        if os.path.exists(overlap): print(f"Skipping {overlap}, already exists.")
-        else: filter_jobs.append(("overlap", (blatdiver_output_file, overlap, c.database, c.index)))
+        if make_overlap:
+            overlap = os.path.join(c.output_dir, f"chunk_{idx}_{original_id}_overlap.tsv")
+            if os.path.exists(overlap): print(f"Skipping {overlap}, already exists.")
+            else: filter_jobs.append(("overlap", (blatdiver_output_file, overlap, c.database, c.index)))
 
         # overlap div filter
-        overlap_div = os.path.join(c.output_dir, f"chunk_{idx}_{original_id}_overlap_div.tsv")
-        if os.path.exists(overlap_div): print(f"Skipping {overlap_div}, already exists.")
-        else: filter_jobs.append(("overlap_div", (blatdiver_output_file, overlap_div, c.tree, c.database, c.index)))
+        if make_overlap_div:
+            overlap_div = os.path.join(c.output_dir, f"chunk_{idx}_{original_id}_overlap_div.tsv")
+            if os.path.exists(overlap_div): print(f"Skipping {overlap_div}, already exists.")
+            else: filter_jobs.append(("overlap_div", (blatdiver_output_file, overlap_div, c.tree, c.database, c.index)))
     
     #run this first round of filtering
     if len(filter_jobs) > 0:
@@ -176,7 +198,12 @@ def run_blat_on_chunk(chunk_jobs, blat_files, ooc_files, c: Config):
     num_blat_db = len(blat_files)
 
     jobs = []
+    output_name = os.path.basename(c.output_dir)
+    final_blat_output = os.path.join(c.output_dir, f"{output_name}_blat_results.tsv")
     # for each chunk, make all of the blat search jobs
+    if os.path.exists(final_blat_output): 
+        print(f"Skipping BLAT, {final_blat_output} already exists.")
+        return
     for chunk in chunk_jobs:
         chunk_record, idx, original_id, species, tmp_fasta_path = chunk
     
@@ -226,8 +253,7 @@ def combine_all_results(c: Config):
 
     jobs = []
     for to_combine, output in input_output:
-        output_path = os.path.join(parent_dir, output)
-        if not os.path.exists(output_path): jobs.append((c.output_dir, c.chunk_size, to_combine, output_path, c.remove))
+        if not os.path.exists(output): jobs.append((c.output_dir, c.chunk_size, to_combine, output, c.remove))
     if len(jobs) > 0:
         #print whatever command you are running
         with Pool(processes=c.max_threads) as pool:
@@ -236,53 +262,88 @@ def combine_all_results(c: Config):
                 for _ in pool.imap_unordered(run_combine_results, jobs):
                     pbar.update()
 
-def prepare_jobs(c:Config):
+def process_single_record(record, config):
     chunk_jobs = []
     tmp_fastas = []
-    for record in SeqIO.parse(c.input_fasta, "fasta"):
-        #get the length of the sequence
-        seq_len = len(record.seq)
-        #get the species of the sequence
-        if c.species == None:
-            try:
-                with tempfile.NamedTemporaryFile(prefix=f"{record.id}_tmp", mode="w", delete=False, suffix=".fa") as tmp_fasta:
-                    SeqIO.write(record, tmp_fasta, "fasta")
-                    tmp_fasta_path = tmp_fasta.name
-                species = get_q_species(tmp_fasta_path, c.kraken_db)
-                os.remove(tmp_fasta_path)
-            except:
-                print("Issue extracting species for", record[:0])
-                species = "unclassified"
-        else: species = c.species
-        print(f"Species of {record.id}:", species)
-        #if the sequence length is greater than the chunk size we want
-        if seq_len > c.chunk_size:
-            for i in range(0, seq_len, c.chunk_size):
-                #then we chunk it by size
-                chunk_seq = record.seq[i:i+c.chunk_size]
-                chunk_record = record[:0]  # copy header
-                #set the sequence to be this chunk
-                chunk_record.seq = chunk_seq
-                #set the id to be the chunk number
-                idx = i // c.chunk_size
-                chunk_record.id = f"{record.id}_chunk_{idx}"
-                chunk_record.description = f"{record.description} chunk {idx}"
-                #get a tmp file of the sequence
-                with tempfile.NamedTemporaryFile(prefix=f"chunk_{idx}_{record.id}_tmp", mode="w", delete=False, suffix=".fa") as tmp_fasta:
-                    SeqIO.write(chunk_record, tmp_fasta, "fasta")
-                    tmp_fasta_path = tmp_fasta.name
-                    tmp_fastas.append(tmp_fasta_path)
-                #record the actual sequence and its record, its chunk number, and its id
-                chunk_jobs.append((chunk_record, idx, record.id, species, tmp_fasta_path))
-        else:
-            #get a tmp file of the sequence
-            with tempfile.NamedTemporaryFile(prefix=f"chunk_0_{record.id}_tmp", mode="w", delete=False, suffix=".fa") as tmp_fasta:
+    
+    # Get the length of the sequence
+    seq_len = len(record.seq)
+    
+    # Get the species of the sequence
+    if config.species is None:
+        try:
+            with tempfile.NamedTemporaryFile(prefix=f"{record.id}_tmp", mode="w", delete=False, suffix=".fa") as tmp_fasta:
                 SeqIO.write(record, tmp_fasta, "fasta")
                 tmp_fasta_path = tmp_fasta.name
+            species = get_q_species(tmp_fasta_path, config.kraken_db)
+            os.remove(tmp_fasta_path)
+        except Exception as e:
+            print(f"Issue extracting species for {record.id}: {e}")
+            species = "unclassified"
+    else:
+        species = config.species
+    
+    print(f"Species of {record.id}: {species}")
+    
+    # If the sequence length is greater than the chunk size we want
+    if seq_len > config.chunk_size:
+        for i in range(0, seq_len, config.chunk_size):
+            # Then we chunk it by size
+            chunk_seq = record.seq[i:i+config.chunk_size]
+            chunk_record = record[:0]  # copy header
+            # Set the sequence to be this chunk
+            chunk_record.seq = chunk_seq
+            # Set the id to be the chunk number
+            idx = i // config.chunk_size
+            chunk_record.id = f"{record.id}_chunk_{idx}"
+            chunk_record.description = f"{record.description} chunk {idx}"
+            
+            # Get a tmp file of the sequence
+            with tempfile.NamedTemporaryFile(prefix=f"chunk_{idx}_{record.id}_tmp", mode="w", delete=False, suffix=".fa") as tmp_fasta:
+                SeqIO.write(chunk_record, tmp_fasta, "fasta")
+                tmp_fasta_path = tmp_fasta.name
                 tmp_fastas.append(tmp_fasta_path)
-            #if it is smaller than the chunk size, just add it
-            chunk_jobs.append((record, 0, record.id, species, tmp_fasta_path)) 
-    return chunk_jobs, tmp_fastas   
+            
+            # Record the actual sequence and its record, its chunk number, and its id
+            chunk_jobs.append((chunk_record, idx, record.id, species, tmp_fasta_path))
+    else:
+        # Get a tmp file of the sequence
+        with tempfile.NamedTemporaryFile(prefix=f"chunk_0_{record.id}_tmp", mode="w", delete=False, suffix=".fa") as tmp_fasta:
+            SeqIO.write(record, tmp_fasta, "fasta")
+            tmp_fasta_path = tmp_fasta.name
+            tmp_fastas.append(tmp_fasta_path)
+        
+        # If it is smaller than the chunk size, just add it
+        chunk_jobs.append((record, 0, record.id, species, tmp_fasta_path))
+    
+    return chunk_jobs, tmp_fastas
+
+def prepare_jobs_parallel(c: Config, n_processes=None):
+    """Parallelized version of prepare_jobs"""
+    if n_processes is None:
+        n_processes = min(c.max_threads, mp.cpu_count())
+    
+    # Read all records first
+    records = list(SeqIO.parse(c.input_fasta, "fasta"))
+    print(f"Processing {len(records)} sequences using {n_processes} threads...")
+    
+    # Create a partial function with the config
+    process_func = partial(process_single_record, config=c)
+    
+    # Combine all results
+    all_chunk_jobs = []
+    all_tmp_fastas = []
+    
+    # Process records in parallel with progress bar
+    with mp.Pool(processes=n_processes) as pool:
+        with tqdm(total=len(records), desc="Processing sequences") as pbar:
+            for result in pool.imap_unordered(process_func, records):
+                chunk_jobs, tmp_fastas = result
+                all_chunk_jobs.extend(chunk_jobs)
+                all_tmp_fastas.extend(tmp_fastas)
+                pbar.update()
+    
+    return all_chunk_jobs, all_tmp_fastas 
     
 def parse_args():
     parser = argparse.ArgumentParser(
@@ -352,7 +413,7 @@ def main():
         )
     
     # go through and build jobs
-    chunk_jobs, tmp_fastas = prepare_jobs(c)
+    chunk_jobs, tmp_fastas = prepare_jobs_parallel(c)
     
     print(f"Prepared {len(chunk_jobs)} jobs(s) to process.")
 

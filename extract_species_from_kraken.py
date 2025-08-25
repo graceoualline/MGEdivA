@@ -34,7 +34,7 @@ def get_sp_from_kraken(kraken_output_file):
         species = last_line[5:]
         species = "_".join(species)
         #print("Last line:", last_line)
-        print("Species:", species)
+        #print("Species:", species)
         
     return species
 
@@ -46,12 +46,12 @@ def get_q_species(fasta_file, kraken_db):
         "kraken2", "--db", kraken_db, "--threads", "1",
         "--report", tmp_filename, fasta_file
     ]
-    print("Finding query species with Kraken")
-    print(" ".join(command))
+    #print("Finding query species with Kraken")
+    #print(" ".join(command))
     # Run the command
     try:
         #run the command
-        subprocess.run(command, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, check=True)
+        subprocess.run(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
         #print("Done running kraken")
         species = get_sp_from_kraken(tmp_filename)
     

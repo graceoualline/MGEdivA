@@ -46,17 +46,20 @@ def adjust_and_merge_tsvs(chunk_dir, chunk_size, output_file, to_combine):
 
         dfs.append(df) 
         
-    try:
-        # Merge all
-        final_df = pd.concat(dfs, ignore_index=True)
+    
+    # Merge all
+    final_df = pd.concat(dfs, ignore_index=True)
 
-        # Save
+    # Save
+    try:
         final_df.to_csv(output_file, sep='\t', index=False)
         print(f"Combined file written to {output_file}")
-        #print("Total length is", total_len)
+        return all_files
+    #print("Total length is", total_len)
     except:
-        print(f"There are no {to_combine} to combine")
-    return all_files
+        print(f"Error creating {to_combine}")
+        return []
+    
 
 if __name__ == "__main__":
     if len(sys.argv) != 5:
