@@ -39,6 +39,8 @@ class Config:
     species: str # user defined species of all of the sequences given in a query
     minScore: int # Is the minimum alignment score threshold, sets blat's parameter -minScore, default 30
     minIdentity: int # Is the threshold of the minimum percent identity a hit must have. Default: 95. Percent identity = ( match / Q_end - Q_start )*100
+    overlap_filter: bool # Is false when you do not want to also do an overlap filter
+    overlap_div_filter: bool # is false when you do not want to do an overlap and divergence filter
 
 def combine_and_cleanup_psl_files(args):
     header_lines = 5
@@ -144,12 +146,12 @@ def run_all_filters(chunk_jobs, c: Config):
         print("Finished running divergence filter.")
 
     #run overlap, overlap_div filters
-    make_overlap = True
-    make_overlap_div = True
-    if os.path.exists(overlap_final_name): 
+    make_overlap = c.overlap_filter
+    make_overlap_div = c.overlap_div_filter
+    if make_overlap and os.path.exists(overlap_final_name): 
         print(f"Skipping {overlap_final_name}, already exists.")
         make_overlap = False
-    if os.path.exists(overlap_div_final_name): 
+    if make_overlap_div and os.path.exists(overlap_div_final_name): 
         print(f"Skipping {overlap_div_final_name}, already exists.")
         make_overlap_div = False
     filter_jobs = []
@@ -207,7 +209,7 @@ def run_blat_on_chunk(chunk_jobs, blat_files, ooc_files, c: Config):
     for chunk in chunk_jobs:
         chunk_record, idx, original_id, species, tmp_fasta_path = chunk
     
-        # make a temporary file that isolates the fasta on its ow
+        # make a temporary file that isolates the fasta on its own
         #get the name and path for the output file
         all_blat_output = os.path.join(c.output_dir, f"chunk_{idx}_{original_id}_blat_output.tsv")
         if os.path.exists(all_blat_output): print(f"Skipping BLAT on chunk_{idx}_{original_id}, chunk_{idx}_{original_id}_blat_output.tsv already exists.")
@@ -226,7 +228,7 @@ def run_blat_on_chunk(chunk_jobs, blat_files, ooc_files, c: Config):
         print("THREADS", c.max_threads, type(c.max_threads))
         with Pool(processes=c.max_threads) as pool:
             #Progress bar
-            with tqdm(total=len(jobs), desc="Running Sequences through BLAT") as pbar:
+            with tqdm(total=len(jobs), desc="Running Sequence(s) through BLAT") as pbar:
                 for _ in pool.imap_unordered(run_blat, jobs):
                     pbar.update()
 
@@ -247,9 +249,11 @@ def combine_all_results(c: Config):
     output_name = os.path.basename(c.output_dir)
     #python3 combine_blatdiver_output.py <blatdiver_output_directory> <chunk_size> <which files to combine ex. *blatdiver_output.tsv> <output_file>
     input_output = [("blat_output.tsv", os.path.join(c.output_dir, f"{output_name}_blat_results.tsv")),
-                    ("overlap_div.tsv", os.path.join(c.output_dir, f"{output_name}_overlap_div.tsv")), 
-                    ("blatdiver_output.tsv", os.path.join(c.output_dir, f"{output_name}_blatdiver_output.tsv")),
-                    ("overlap.tsv", os.path.join(c.output_dir, f"{output_name}_overlap.tsv"))]
+                    ("blatdiver_output.tsv", os.path.join(c.output_dir, f"{output_name}_blatdiver_output.tsv"))]
+    if c.overlap_div_filter:
+        input_output.append(("overlap_div.tsv", os.path.join(c.output_dir, f"{output_name}_overlap_div.tsv")))
+    if c.overlap_filter:
+        input_output.append(("overlap.tsv", os.path.join(c.output_dir, f"{output_name}_overlap.tsv")))
 
     jobs = []
     for to_combine, output in input_output:
@@ -319,13 +323,12 @@ def process_single_record(record, config):
     return chunk_jobs, tmp_fastas
 
 def prepare_jobs_parallel(c: Config, n_processes=None):
-    """Parallelized version of prepare_jobs"""
     if n_processes is None:
         n_processes = min(c.max_threads, mp.cpu_count())
     
     # Read all records first
     records = list(SeqIO.parse(c.input_fasta, "fasta"))
-    print(f"Processing {len(records)} sequences using {n_processes} threads...")
+    print(f"Processing {len(records)} sequence(s) using {n_processes} threads...")
     
     # Create a partial function with the config
     process_func = partial(process_single_record, config=c)
@@ -336,7 +339,7 @@ def prepare_jobs_parallel(c: Config, n_processes=None):
     
     # Process records in parallel with progress bar
     with mp.Pool(processes=n_processes) as pool:
-        with tqdm(total=len(records), desc="Processing sequences") as pbar:
+        with tqdm(total=len(records), desc="Processing sequence(s)") as pbar:
             for result in pool.imap_unordered(process_func, records):
                 chunk_jobs, tmp_fastas = result
                 all_chunk_jobs.extend(chunk_jobs)
@@ -374,6 +377,10 @@ def parse_args():
         "-minScore", type = int, help = "Is the minimum alignment score threshold, sets blat's parameter -minScore, default 50")
     parser.add_argument(
         "-minIdentity", type = int, help = "Is the threshold of the minimum percent identity a hit must have. Default: 0. Percent identity = ( match / Q_end - Q_start )*100")
+    parser.add_argument(
+        "-overlap_filter", type = int, help = "If you want to do additional filtering with the overlap filter, set to 1. Default: 0 (Filter explained in https://github.com/graceoualline/blatdiver/)")
+    parser.add_argument(
+        "-overlap_div_filter", type = int, help = "If you want to do additional filtering with the overlap and divergence filter, set to 1. Default: 0 (Filter explained in https://github.com/graceoualline/blatdiver/)")
 
     return parser.parse_args()
 
@@ -391,7 +398,9 @@ def main():
     remove = bool(args.remove) if args.remove == 0 else True,
     species = args.species if args.species else None,
     minScore = args.minScore if args.minScore else 30,
-    minIdentity = args.minIdentity if args.minIdentity else 0
+    minIdentity = args.minIdentity if args.minIdentity else 0,
+    overlap_filter = bool(args.overlap_filter) if args.overlap_filter==1 else False,
+    overlap_div_filter = bool(args.overlap_div_filter) if args.overlap_div_filter==1 else False
     )
 
     if not os.path.exists(c.output_dir):
