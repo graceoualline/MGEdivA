@@ -63,7 +63,7 @@ python /usr1/gouallin/blat/blat_pipeline/blatdiver.py \
 
 ### Example Commands
 
-#### Basic run for Dr.Yu specifically
+#### Basic Command
 ```bash
 python blatdiver.py \
   -q my_sequences.fasta \
@@ -144,18 +144,13 @@ python3 split_fasta_by_bp.py [
 
 ## Troubleshooting
 
-### Common Issues
+## Common Issues
 
-- **File Permission Errors**: Ensure read/write permissions for input/output directories
-- **Memory Issues**: Reduce chunk size or number of threads
-- **Missing Dependencies**: Verify all required modules are installed and accessible
-- **Database Mismatch**: Ensure equal numbers of `.2bit` and `.ooc` files
+- 
 
-### Error Messages
+## Error Messages
 
-- `Mismatch in file counts`: Check that every BLAT file has a matching OOC file
-- `Species extraction failed`: Verify Kraken2 database path and format
-- `BLAT command failed`: Check BLAT installation and database integrity
+- 
 
 ## Citation
 
