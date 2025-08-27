@@ -14,6 +14,10 @@ Please ensure you have the following tools downloaded:
 - BLAT: https://hgdownload.cse.ucsc.edu/admin/exe/linux.x86_64/blat/
 - Kraken2: https://github.com/DerrickWood/kraken2/wiki/Manual
 
+```
+git clone https://github.com/graceoualline/blatdiver.git
+```
+
 ## Usage
 
 ### Quick Start
