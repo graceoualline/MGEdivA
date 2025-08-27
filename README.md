@@ -21,6 +21,21 @@ Please ensure you have the following tools downloaded:
 ```bash
 python3 blatdiver.py -q input.fasta -o output_directory -d /path/to/blat_database -tr TimeTree_v5_Final.nwk -i database_index.txt -k /path/to/kraken_db
 ```
+#### Basic ready-to-run commmand for Dr.Yu 
+```bash
+python /usr1/gouallin/blat/blat_pipeline/blatdiver.py \
+  -q /usr1/gouallin/blat/blat_pipeline/test/acrB.fasta \
+  -o blatdiver_test_results_acrB \
+  -d /usr1/shared/gtdb_2bil_split_2bit/ \
+  -tr /usr1/shared/TimeTree_v5_Final.nwk \
+  -i /usr1/shared/gtdb_2bil_seq_id_species_loc_index.pkl \
+  -k /usr1/shared/kraken2_custom_db/ \
+  -t 20 \
+  -r 0 \
+  -minIdentity 90 \
+  -overlap_filter 1 \
+  -overlap_div_filter 1
+```
 
 ### Parameters
 
@@ -36,7 +51,7 @@ python3 blatdiver.py -q input.fasta -o output_directory -d /path/to/blat_databas
 - `-t, --threads`: Number of threads to use (default: 1) # Highly recommend using more threads to speed up the program.
 - `-c, --chunk`: Chunk size for sequence splitting (default: 100,000 bp)
 - `-r, --remove`: Clean up intermediate files (1=True, 0=False, default: 1)
-- `-s, --species`: Predefined species name (replace spaces with '_')
+- `-s, --species`: If you want to define the species of your query, otherwise we will find it for you with Kraken. (replace spaces with '_') (For multifasta files, we will apply this species to all of the sequences in the file. We do not have the ability to manually assign different species to each individual sequence.)
 - `-minScore`: Minimum BLAT alignment score (default: 30)
 - `-minIdentity`: Minimum percent identity threshold (default: 0)
 - `-overlap_filter`: Enable overlap filtering (1=True, 0=False, default: 0)
@@ -44,16 +59,16 @@ python3 blatdiver.py -q input.fasta -o output_directory -d /path/to/blat_databas
 
 ### Example Commands
 
-#### Basic run with 8 threads:
+#### Basic run for Dr.Yu specifically
 ```bash
 python blatdiver.py \
   -q my_sequences.fasta \
   -o results_dir \
-  -d /data/blat_db \
-  -tr TimeTree_v5_Final.nwk \
-  -i database_index.txt \
-  -k /data/kraken2_db \
-  -t 8
+  -d /usr1/shared/gtdb_2bil_split_2bit/ \
+  -tr /usr1/shared/TimeTree_v5_Final.nwk \
+  -i /usr1/shared/gtdb_2bil_seq_id_species_loc_index.pkl \
+  -k /usr1/shared/kraken2_custom_db/ \
+  -t 20 \
 ```
 
 #### Run with additional filtering:
@@ -65,7 +80,7 @@ python blatdiver.py \
   -tr TimeTree_v5_Final.nwk \
   -i database_index.txt \
   -k /data/kraken2_db \
-  -t 8 \
+  -t 20 \
   -overlap_filter 1 \
   -overlap_div_filter 1 \
   -minIdentity 95
@@ -73,12 +88,14 @@ python blatdiver.py \
 
 ## Output Files
 
-BlatDiver generates several output files in the specified output directory:
+blatdiver generates several output files in the specified output directory:
 
 - `{output_name}_blat_results.tsv`: Raw BLAT alignment results
 - `{output_name}_blatdiver_output.tsv`: Filtered results with divergence information
 - `{output_name}_overlap.tsv`: Overlap-filtered results (if enabled)
 - `{output_name}_overlap_div.tsv`: Overlap and divergence filtered results (if enabled)
+
+*Note: The program is designed such that if a run is stopped prematurely, it will be able to start again at the point where it left off. It does this by checking for what files already exist. Therefore, try to avoid creating any files with names that could overlap with blatdiver's output.
 
 ## Database Requirements
 
@@ -87,9 +104,18 @@ BlatDiver generates several output files in the specified output directory:
 - Each `.2bit` file must have a matching `.ooc` file
 - Files should be properly indexed
 
+## Creating the Blat database
+- We have created a blat compatible database of the GTDB. If you wish to create your own database, I will walk through the process, using the GTDB as an example.
+
+# Building the database
+- I will make a more streamlined pipeline of building a database later
+- the Blat database must be in 2bit form, and can have a maximum of around 2 billion base pairs in each 2bit file. We take our sequences, and use the program split_fasta_by_bp.py to split the database sequences into 2 billion bp chunks to be converted to 2bit.
+```
+python3 split_fasta_by_bp.py [
+```
+
 ### Index File
-- Tab-separated file mapping database sequences to species and genomic locations
-- Format: `sequence_id\tspecies\tlocation_info`
+- 
 
 ### TimeTree File
 - Newick format phylogenetic tree
@@ -129,17 +155,9 @@ BlatDiver generates several output files in the specified output directory:
 
 ## Citation
 
-If you use BlatDiver in your research, please cite:
-[Add appropriate citation information]
-
-## License
-
-[Add license information]
-
-## Contributing
-
-[Add contribution guidelines]
+If you use blatdiver in your research, please cite:
+[Add later]
 
 ## Support
 
-For questions and support, please [add contact information or issue tracker link].
+For questions and support, please submit an issue ticket.
