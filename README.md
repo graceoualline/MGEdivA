@@ -131,23 +131,31 @@ python3 make_blat_db.py gtdb_combined.fa blat_gtdb_db 2
 - The index file created for the blat-gtdb database is named "gtdb_2bil_seq_id_species_loc_index.pkl".
 
 #### Creating an index file for a custom database
-- The script build_database_index.py will intake a blat database of 2bit files, and output an index linking sequence ids to their location and species. It will do the following:
--   get the locations of all of the sequences within the 2bit files
--   get species of all of the sequences (if not provided)
--   creates a hash table index where index[seq_id] = (location, species)
+- First, you will need to run kraken on all of your sequences, so that we are able to classify their species.
 ```
-python3 build_database_index.py [blat_db_2bit_dir] [output_name] [seq_id and species file (if avaliable)]
+python3 extract_species_from_kraken [fasta file] [kraken_db]
 ```
-- if you wish to provide the species for some of your sequences, you can input a .txt file of sequence id's and their species, tab separated as such:
+- The output {fasta_file}_kraken_output.txt, which is the output that kraken generates showing the tree splits it made to characterize your sequence
+- The output {fasta_file}_seq_species.txt is a tab separated file like so:
 ```
 seq_id1  species1
 seq_id2  species2
 ```
-- The rest of the sequences' species will be classified using Kraken2
+- If you wish to manually define some of the sequences in your database, you can edit the species next to that sequence in {fasta_file}_seq_species.txt
+- The script build_database_index.py will intake a blat database of 2bit files and {fasta_file}_seq_species.txt, and output an index linking sequence ids to their location and species. It will do the following:
+-   get the locations of all of the sequences within the 2bit files
+-   creates a hash table index where index[seq_id] = (species, location)
+```
+python3 build_database_index.py [blat_db_2bit_dir] [output_name] [{fasta_file}_seq_species.txt]
+```
+
 
 ### TimeTree File
 - Newick format phylogenetic tree
 - Should contain species present in your analysis
+
+### Kraken Database
+- f
 
 ## Troubleshooting
 - 
