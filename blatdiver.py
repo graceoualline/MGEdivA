@@ -66,7 +66,7 @@ def combine_and_cleanup_psl_files(args):
 def run_div_filter(job):
     all_blat_raw, output_file, species, index, tree, tmp_fasta_path, database, minIdentity = job
     index = load_hash_table(index)
-    print("running", all_blat_raw)
+    print("Running", all_blat_raw)
     try:
         #run the first round of filtering on the raw blat data
         filter_blat(all_blat_raw, output_file, species, index, tree, tmp_fasta_path, database, minIdentity)
