@@ -17,7 +17,7 @@ def write_group(group_seqs, index):
 
 def progress(processed_seqs, total_seqs, start_time, file_index):
     # Progress indicator
-    if processed_seqs % 1000 == 0 or processed_seqs == total_seqs:
+    if processed_seqs % 10000 == 0 or processed_seqs == total_seqs:
         elapsed = time.time() - start_time
         percent = (processed_seqs / total_seqs) * 100
         rate = processed_seqs / elapsed if elapsed > 0 else 0

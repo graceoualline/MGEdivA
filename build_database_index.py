@@ -50,7 +50,7 @@ def extract_2bit_fasta(seq_id, two_bit_file):
         #input("Press Enter after checking the file...") #pause the program so I can check the contents of the ref_file
     return seq_fasta_name
 
-def combine_seq_spec_loc(species_file, seq_id_loc, kraken_db, two_bit_dir):
+def combine_seq_spec_loc(species_file, seq_id_loc, two_bit_dir):
     # Step 1: Load species data into a dictionary
     seq_to_species = {}
     if species_file and os.path.exists(species_file):
@@ -63,11 +63,10 @@ def combine_seq_spec_loc(species_file, seq_id_loc, kraken_db, two_bit_dir):
                     seq_to_species[seq_id] = species
         print(f"Loaded {len(seq_to_species)} existing species annotations")
     else:
-        print("No existing species file provided or file doesn't exist")
+        raise Exception("No species file provided or file doesn't exist")
 
     #Step 2: Process each sequence
     result_dict = {}
-    kraken_classified = 0
     
     for i, seq_loc in enumerate(seq_id_loc, 1):
         #make sure there are two entries
@@ -79,40 +78,24 @@ def combine_seq_spec_loc(species_file, seq_id_loc, kraken_db, two_bit_dir):
                 print(f"Progress: {i}/{len(seq_id_loc)} sequences processed")
 
             # if the sequence does not have a species, go find it with kraken
-            species = seq_to_species.get(seq_id, None)
-            if species is None or species.strip() == "":
-                print(f"Classifying {seq_id} with Kraken...")
-                seq_fasta = extract_2bit_fasta(seq_id, os.path.join(two_bit_dir, file_location))
-                species = get_q_species(seq_fasta, kraken_db)
-                if os.path.exists(seq_fasta): os.remove(seq_fasta)
-                kraken_classified += 1
+            species = seq_to_species.get(seq_id, "unclassified")
             result_dict[seq_id] = (species, file_location)
-
-    print(f"\nClassification summary:")
-    print(f"  Total sequences: {len(result_dict)}")
-    print(f"  Classified by Kraken: {kraken_classified}")
 
     return result_dict
 
 if __name__ == "__main__":
     if len(sys.argv) != 4:
-        print("Usage: python3 build_database_index.py <2bit_blat_db_dir> <output_file_name> <kraken_db> [species_file]")
+        print("Usage: python3 build_database_index.py <2bit_blat_db_dir> <output_file_name> <species_file>")
         print("  2bit_blat_db_dir: Directory containing .2bit files")
         print("  output_file_name: Output .pkl file name")
-        print("  kraken_db: Path to Kraken database")
         print("  species_file: Existing species annotation file")
         sys.exit(1)
     two_bit_dir = sys.argv[1]
     final_output = sys.argv[2]
-    kraken_db = sys.argv[3]
-    species_file = sys.argv[4]
+    species_file = sys.argv[3]
 
     if not os.path.exists(two_bit_dir):
         print(f"ERROR: 2bit directory {two_bit_dir} does not exist")
-        sys.exit(1)
-        
-    if not os.path.exists(kraken_db):
-        print(f"ERROR: Kraken database {kraken_db} does not exist")
         sys.exit(1)
 
     input_files = [f for f in os.listdir(two_bit_dir) 
@@ -133,7 +116,7 @@ if __name__ == "__main__":
     print("\n" + "="*60) 
     print("STEP 2: Combining with species data and Kraken classification")
     print("="*60)
-    seq_species_loc = combine_seq_spec_loc(species_file, seq_id_loc, kraken_db, two_bit_dir)
+    seq_species_loc = combine_seq_spec_loc(species_file, seq_id_loc, two_bit_dir)
 
     # # now make a loadable index from this new table of id, species, location
     print("\n" + "="*60)

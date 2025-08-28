@@ -31,31 +31,11 @@ def get_sp_from_kraken(kraken_output_file):
                 print("Kraken output is empty.")
                 return "unclassified"
 
-            # Look for species-level classification (S rank)
-            for line in reversed(lines):  # Start from bottom for most specific
-                parts = line.strip().split('\t')
-                if len(parts) >= 6 and parts[3] == 'S':  # Species rank
-                    species_name = parts[5].strip()
-                    # Clean up the species name
-                    species_name = species_name.replace(' ', '_')
-                    return species_name
-
-            # If no species found, look for genus
-            for line in reversed(lines):
-                parts = line.strip().split('\t')
-                if len(parts) >= 6 and parts[3] == 'G':  # Genus rank
-                    genus_name = parts[5].strip()
-                    genus_name = genus_name.replace(' ', '_')
-                    return genus_name + "_sp"
-            '''
             last_line = lines[-1]
             last_line = last_line.split()
             species = last_line[5:]
             species = "_".join(species)
-            #print("Last line:", last_line)
-            #print("Species:", species)
-            '''
-            return "unclassified"
+            return species
     except Exception as e:
             print(f"Error parsing Kraken output: {e}")
             return "unclassified"
@@ -68,9 +48,6 @@ def get_q_species(fasta_file, kraken_db):
         "kraken2", "--db", kraken_db, "--threads", "1",
         "--report", tmp_filename, fasta_file
     ]
-    #print("Finding query species with Kraken")
-    #print(" ".join(command))
-    # Run the command
     try:
         #run the command
         subprocess.run(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
@@ -88,12 +65,7 @@ def get_q_species(fasta_file, kraken_db):
 
 def make_seq_id_species_txt(seq_file, output, kraken_db):
     kraken_output = output + "_kraken_output.txt"
-    #with tempfile.NamedTemporaryFile(prefix="kraken_report", delete=False, mode='w+') as tmp:
-    #    tmp_filename = tmp.name
-    #command = [
-    #    "kraken2", "--db", kraken_db, "--report", 
-    #    tmp_filename, "--output", kraken_output, "--use-names", seq_file
-    #]
+
     command = [
         "kraken2", "--db", kraken_db, "--output", kraken_output, "--use-names", seq_file
     ]
@@ -113,9 +85,6 @@ def make_seq_id_species_txt(seq_file, output, kraken_db):
         print(f"Data successfully written to {species_file}")
     except subprocess.CalledProcessError as e:
         print(f"Error running Kraken on {fasta_file}:\n{e.stderr.decode().strip()}")
-
-
-
 
 if __name__ == "__main__":
     # Check if the correct number of command-line arguments is provided

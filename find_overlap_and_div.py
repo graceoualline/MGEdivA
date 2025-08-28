@@ -40,15 +40,15 @@ def find_overlap_and_div(rows, output_file, tree, blat_db, kraken):
     species_path_cache = {"unclassified": "NA"}
     species_set = set(row[rsp] for row in rows)
 
-    print(f"Pre-caching {len(species_set)} species paths...")
+    #print(f"Pre-caching {len(species_set)} species paths...")
     i = 0
     for species in species_set:
-        print(i)
+        #print(i)
         i += 1
         if species not in species_path_cache:
             species_path_cache[species] = get_path(species, tree)
 
-    print(f"Processing {len(rows)} rows")
+    #print(f"Processing {len(rows)} rows")
 
     start_positions = [int(row[1][qs]) for row in rows]
 
@@ -64,7 +64,7 @@ def find_overlap_and_div(rows, output_file, tree, blat_db, kraken):
         max_search_idx = bisect.bisect_right(start_positions, e1)
         
         for j in range(i+1, max_search_idx):
-            print(i, j)
+            #print(i, j)
             if j in used:
                 continue
             s2, e2, species2, row2 = int(rows[j][qs]), int(rows[j][qe]), rows[j][rsp], rows[j]
@@ -132,8 +132,8 @@ if __name__ == "__main__":
     blat_db = sys.argv[4]
     kraken = load_hash_table(sys.argv[5])
 
-    print("Compressing")
+    #print("Compressing")
     rows = compress(input_file)
-    print("Rows before:", len(rows))
+    #print("Rows before:", len(rows))
     find_overlap_and_div(rows, output, tree, blat_db, kraken)
     print("Filtered file written to", output)

@@ -75,20 +75,17 @@ def compress(input_file):
             compressed.append(tuple(row2))
             continue
         
+        if species2 == species_cur and overlaps(s_cur, e_cur, s2, e2):
+            #then update the end
+            e_cur = max(e_cur, e2)
         #if it does not overlap or does not share the same species, start the next merge
-        if species2 != species_cur or not overlaps(s_cur, e_cur, s2, e2):
+        else:
             #update this row to be the new values of the new end
             row_cur[qe] = str(e_cur)
             compressed.append(tuple(row_cur))
             #start a new current fam
             s_cur, e_cur, species_cur, row_cur = int(row[qs]), int(row[qe]), row[rsp], list(row)
-        elif species2 == species_cur and overlaps(s_cur, e_cur, s2, e2):
-            #then update the end
-            e_cur = max(e_cur, e2)
-        else:
-            print("Error, weird third case")
-            assert(False)
-
+        
     # add the final interval
     row_cur[qe] = str(e_cur)
     compressed.append(tuple(row_cur))

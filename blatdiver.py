@@ -66,7 +66,6 @@ def combine_and_cleanup_psl_files(args):
 def run_div_filter(job):
     all_blat_raw, output_file, species, index, tree, tmp_fasta_path, database, minIdentity = job
     index = load_hash_table(index)
-    print("Running", all_blat_raw)
     try:
         #run the first round of filtering on the raw blat data
         filter_blat(all_blat_raw, output_file, species, index, tree, tmp_fasta_path, database, minIdentity)
@@ -81,16 +80,12 @@ def run_specified_filter(job):
         if job_type == "overlap":
             infile, outfile, database, index = args
             index = load_hash_table(index)
-            print("overlap", outfile)
             rows = compress(infile)
             find_overlap(rows, outfile, database, index)
         elif job_type == "overlap_div":
             to_filter_file, overlap_div_file, tree, database, index = args
             index = load_hash_table(index)
-            print("overlap_div", overlap_div_file)
             rows = compress(to_filter_file)
-            print("compressed", len(rows))
-            print(to_filter_file, overlap_div_file)
             find_overlap_and_div(rows, overlap_div_file, tree, database, index)
     except subprocess.CalledProcessError as e:
         print(f"[{job_type}] Error on {args[1] if len(args) > 1 else 'unknown'}:\n{e.stderr.decode().strip()}")
@@ -190,10 +185,9 @@ def run_blat(args):
     )
     try:
         #run the command
-        #print(command)
         subprocess.run(command, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, check=True)
     except subprocess.CalledProcessError as e:
-        print(f"Error running BLAT on {output_path}:\n{e.stderr.decode().strip()}")
+        print(f"Error running blat on {output_path}:\n{e.stderr.decode().strip()}")
     return 1
 
 def run_blat_on_chunk(chunk_jobs, blat_files, ooc_files, c: Config):
@@ -204,7 +198,7 @@ def run_blat_on_chunk(chunk_jobs, blat_files, ooc_files, c: Config):
     final_blat_output = os.path.join(c.output_dir, f"{output_name}_blat_results.tsv")
     # for each chunk, make all of the blat search jobs
     if os.path.exists(final_blat_output): 
-        print(f"Skipping BLAT, {final_blat_output} already exists.")
+        print(f"Skipping blat, {final_blat_output} already exists.")
         return
     for chunk in chunk_jobs:
         chunk_record, idx, original_id, species, tmp_fasta_path = chunk
@@ -212,7 +206,7 @@ def run_blat_on_chunk(chunk_jobs, blat_files, ooc_files, c: Config):
         # make a temporary file that isolates the fasta on its own
         #get the name and path for the output file
         all_blat_output = os.path.join(c.output_dir, f"chunk_{idx}_{original_id}_blat_output.tsv")
-        if os.path.exists(all_blat_output): print(f"Skipping BLAT on chunk_{idx}_{original_id}, chunk_{idx}_{original_id}_blat_output.tsv already exists.")
+        if os.path.exists(all_blat_output): print(f"Skipping blat on chunk_{idx}_{original_id}, chunk_{idx}_{original_id}_blat_output.tsv already exists.")
         else:
             output_chunk = os.path.join(c.output_dir, f"chunk_{idx}_{original_id}")
             if not os.path.exists(output_chunk): os.makedirs(output_chunk)
@@ -225,10 +219,9 @@ def run_blat_on_chunk(chunk_jobs, blat_files, ooc_files, c: Config):
                     jobs.append((c.database, blat_files[i], ooc_files[i], tmp_fasta_path, output_path, c.minScore))
     if len(jobs) > 0:
         #print whatever command you are running
-        print("THREADS", c.max_threads, type(c.max_threads))
         with Pool(processes=c.max_threads) as pool:
             #Progress bar
-            with tqdm(total=len(jobs), desc="Running Sequence(s) through BLAT") as pbar:
+            with tqdm(total=len(jobs), desc="Running Sequence(s) through blat") as pbar:
                 for _ in pool.imap_unordered(run_blat, jobs):
                     pbar.update()
 
@@ -240,7 +233,6 @@ def run_combine_results(job):
             for f in to_remove: os.remove(f)
     except subprocess.CalledProcessError as e:
         print(f"Error combining results {output_path}: {e}")
-    print("Done")
     return 1
 
 def combine_all_results(c: Config):
@@ -350,9 +342,8 @@ def prepare_jobs_parallel(c: Config, n_processes=None):
     
 def parse_args():
     parser = argparse.ArgumentParser(
-        description="Take a FASTA file and it through Blatdiver."
+        description="Take a FASTA file and it through blatdiver."
     )
-
     parser.add_argument(
         "-q", "--query", required = True, help="Path to the query FASTA file")
     parser.add_argument(
@@ -416,9 +407,9 @@ def main():
     if len(blat_files) != len(ooc_files):
         raise ValueError(
             f"Mismatch in file counts:\n"
-            f"- Found {len(blat_files)} BLAT file(s)\n"
+            f"- Found {len(blat_files)} blat file(s)\n"
             f"- Found {len(ooc_files)} OOC file(s)\n"
-            "Please ensure every BLAT file has a matching OOC file."
+            "Please ensure every blat file has a matching OOC file."
         )
     
     # go through and build jobs
@@ -430,9 +421,9 @@ def main():
     #run the function run_blat_on_chunk on all different threads
     print(f"Running on {c.max_threads} threads")
     run_blat_on_chunk(chunk_jobs, blat_files, ooc_files, c)
-    print("All BLAT jobs finished.")
+    print("All blat jobs finished.")
 
-    print("Now filtering Blat Output")
+    print("Now filtering blat Output")
     run_all_filters(chunk_jobs, c)
     print("All filtering complete")
 
