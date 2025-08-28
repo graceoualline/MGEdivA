@@ -7,9 +7,20 @@ A parallelized sequence alignment tool that uses BLAT and divergence to find Mob
 Blatdiver is designed to find novel MGEs through optimized threading of BLAT (BLAST-Like Alignment Tool) operations, and advanced filtering. It splits large sequences into manageable chunks, runs BLAT searches in parallel across multiple database files, and applies divergence filtering and sequence analysis to identify potential MGEs. The tool is particularly effective for horizontal gene transfer detection.
 
 ## Installation
+Install blatdiver:
 ```bash
 git clone https://github.com/graceoualline/blatdiver.git
 cd blatdiver
+```
+Install supporting files and databases here: (PUT LINK TO LARGER FILES)
+You should have the following:
+- gtdb_2bil_split_2bit
+- TimeTree_v5_Final.nwk
+- gtdb_2bil_seq_id_species_loc_index.pkl
+- kraken2_custom_db
+### Required Python Packages
+```bash
+pip install biopython tqdm
 ```
 ### Prerequisites
 Please ensure you have the following tools downloaded:
@@ -39,10 +50,6 @@ kraken2-build --download-library nt --db kraken2_custom_db
 
 kraken2-build --build --db kraken2_custom_db
 kraken2-build --clean --db kraken2_custom_db
-```
-### Required Python Packages
-```bash
-pip install biopython tqdm
 ```
 ## Usage
 
