@@ -15,21 +15,43 @@ cd blatdiver
 Please ensure you have the following tools downloaded:
 - Python 3.7+
 - BLAT: https://hgdownload.cse.ucsc.edu/admin/exe/linux.x86_64/blat/
+  ```bash
+  conda install -c bioconda blat
+  ```
 - Kraken2: https://github.com/DerrickWood/kraken2/wiki/Manual
+  ```bash
+  conda install -c bioconda kraken2
+  ```
+#### Kraken and Kraken Database
+We provide the kraken database ```kraken2_custom_db```. If you want to recreate it locally, do the following:
+```bash
+mkdir -p kraken2_custom_db
 
+kraken2-build --download-taxonomy --db kraken2_custom_db
+
+kraken2-build --download-library archaea --db kraken2_custom_db
+kraken2-build --download-library bacteria --db kraken2_custom_db
+kraken2-build --download-library plasmid --db kraken2_custom_db
+kraken2-build --download-library viral --db kraken2_custom_db
+kraken2-build --download-library fungi --db kraken2_custom_db
+kraken2-build --download-library protozoa --db kraken2_custom_db
+kraken2-build --download-library nt --db kraken2_custom_db
+
+kraken2-build --build --db kraken2_custom_db
+kraken2-build --clean --db kraken2_custom_db
+```
 ### Required Python Packages
 ```bash
 pip install biopython tqdm
 ```
-
 ## Usage
 
 ### Quick Start
 
 ```bash
-python3 blatdiver.py -q input.fasta -o output_directory -d /path/to/blat_database -tr TimeTree_v5_Final.nwk -i database_index.txt -k /path/to/kraken_db
+python3 blatdiver.py -q input.fasta -o output_directory -d /path/to/blat_database -tr TimeTree_v5_Final.nwk -i database_index.txt -k /path/to/kraken_db --threads 20
 ```
-#### Reqady-to-Run Example (only if you are on faust) 
+#### Ready-to-Run Example (only on FAUST) 
 ```bash
 python /usr1/gouallin/blat/blat_pipeline/blatdiver.py \
   -q /usr1/gouallin/blat/blat_pipeline/test/acrB.fasta \
@@ -108,6 +130,7 @@ These filters further refine the alignments that were identified as divergently 
 - While effective at reducing false positives, it also reduces blatdiver's sensitivity for detecting true MGEs (see paper for details)
 #### Overlap Divergence Filtering
 - Enabling ```-overlap_div_filter 1``` produces the file ```{output_name}_overlap_div.tsv```
+- This filter processes the results from {output_name}_blatdiver_output.tsv
 -This filter identifies overlapping alignments where the source species are divergently distant (>= 1 MYA) 
 - It is the most stringent filter that effectively reduces false positives but may decrease sensitivity for detecting true MGEs and requires longer processing time.
 - Recommended for high-confidence MGE detection when processing time is not a constraint
