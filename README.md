@@ -7,16 +7,14 @@ A parallelized sequence alignment tool that uses BLAT and divergence to find Mob
 Blatdiver is designed for optimized threading of BLAT (BLAST-Like Alignment Tool) operations. It splits large sequences into manageable chunks, runs BLAT searches in parallel across multiple database files, and applies divergence filtering and sequence analysis to identify potential MGEs.
 
 ## Installation
-
+```
+git clone https://github.com/graceoualline/blatdiver.git
+```
 ### Prerequisites
 Please ensure you have the following tools downloaded:
 - Python 3.7+
 - BLAT: https://hgdownload.cse.ucsc.edu/admin/exe/linux.x86_64/blat/
 - Kraken2: https://github.com/DerrickWood/kraken2/wiki/Manual
-
-```
-git clone https://github.com/graceoualline/blatdiver.git
-```
 
 ## Usage
 
@@ -40,7 +38,6 @@ python /usr1/gouallin/blat/blat_pipeline/blatdiver.py \
   -overlap_filter 1 \
   -overlap_div_filter 1
 ```
-
 ### Parameters
 
 #### Required Arguments
@@ -105,13 +102,10 @@ blatdiver generates several output files in the specified output directory:
 
 ### BLAT Database
 - We have created a blat compatible database of the GTDB, named "gtdb_2bil_split_2bit".
-
-
 ### Creating the Blat database
 -  If you wish to create your own database, it must fulfill the following requirements:
--   Must contain `.2bit` files and corresponding `.ooc` files
 -   Each `.2bit` file must have a matching `.ooc` file
--   Files should be properly indexed
+-   Files should have a proper index made that will contain each sequence's location within the database, and its species (instructions below).
 
 #### Building the database
 - The blat database must be in 2bit form, and can have a maximum of around 2 billion base pairs in each 2bit file. Put all of the sequences that you want in the database into the same multifasta file. The program make_blat_db.py will do the following:
@@ -123,7 +117,7 @@ python3 make_blat_db.py [fasta file] [output name] [size of split in bil. bp (re
 ```
 For example:
 ```
-python3 make_blat_db.py gtdb_combined.fa blat_gtdb_db 2
+python3 make_blat_db.py gtdb.fa blat_gtdb_db 2
 ```
 
 ### Index File
@@ -146,9 +140,8 @@ seq_id2  species2
 -   get the locations of all of the sequences within the 2bit files
 -   creates a hash table index where index[seq_id] = (species, location)
 ```
-python3 build_database_index.py [blat_db_2bit_dir] [output_name] [{fasta_file}_seq_species.txt]
+python3 build_database_index.py [blat_db_2bit_dir] [output_index_name.pkl] [{fasta_file}_seq_species.txt]
 ```
-
 
 ### TimeTree File
 - Newick format phylogenetic tree
