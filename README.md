@@ -104,45 +104,53 @@ blatdiver generates several output files in the specified output directory:
 ## Database Requirements
 
 ### BLAT Database
-- Must contain `.2bit` files and corresponding `.ooc` files
-- Each `.2bit` file must have a matching `.ooc` file
-- Files should be properly indexed
+- We have created a blat compatible database of the GTDB, named "gtdb_2bil_split_2bit".
 
-## Creating the Blat database
-- We have created a blat compatible database of the GTDB. If you wish to create your own database, I will walk through the process, using the GTDB as an example.
 
-# Building the database
-- I will make a more streamlined pipeline of building a database later
-- the Blat database must be in 2bit form, and can have a maximum of around 2 billion base pairs in each 2bit file. We take our sequences, and use the program split_fasta_by_bp.py to split the database sequences into 2 billion bp chunks to be converted to 2bit.
+### Creating the Blat database
+-  If you wish to create your own database, it must fulfill the following requirements:
+-   Must contain `.2bit` files and corresponding `.ooc` files
+-   Each `.2bit` file must have a matching `.ooc` file
+-   Files should be properly indexed
+
+#### Building the database
+- The blat database must be in 2bit form, and can have a maximum of around 2 billion base pairs in each 2bit file. Put all of the sequences that you want in the database into the same multifasta file. The program make_blat_db.py will do the following:
+-   split the multifasta file such that ~2 billion (or specified amount) bp are in each split file.
+-   convert split files to 2bit format
+-   make ooc files for all of the 2bit files.
 ```
-python3 split_fasta_by_bp.py [
+python3 make_blat_db.py [fasta file] [output name] [size of split in bil. bp (recommend 2)]
+```
+For example:
+```
+python3 make_blat_db.py gtdb_combined.fa blat_gtdb_db 2
 ```
 
 ### Index File
-- 
+- The index file is a hash table that contains all sequence ids in the database. It allows us to quickly reference sequence's location and species during the pipeline.
+- The index file created for the blat-gtdb database is named "gtdb_2bil_seq_id_species_loc_index.pkl".
+
+#### Creating an index file for a custom database
+- The script build_database_index.py will intake a blat database of 2bit files, and output an index linking sequence ids to their location and species. It will do the following:
+-   get the locations of all of the sequences within the 2bit files
+-   get species of all of the sequences (if not provided)
+-   creates a hash table index where index[seq_id] = (location, species)
+```
+python3 build_database_index.py [blat_db_2bit_dir] [output_name] [seq_id and species file (if avaliable)]
+```
+- if you wish to provide the species for some of your sequences, you can input a .txt file of sequence id's and their species, tab separated as such:
+```
+seq_id1  species1
+seq_id2  species2
+```
+- The rest of the sequences' species will be classified using Kraken2
 
 ### TimeTree File
 - Newick format phylogenetic tree
 - Should contain species present in your analysis
 
-## Performance Tips
-
-1. **Thread Usage**: Use multiple threads (`-t`) for faster processing, but don't exceed your CPU core count
-2. **Chunk Size**: Adjust chunk size (`-c`) based on your sequence lengths and memory constraints
-3. **Filtering**: Enable additional filters only if needed, as they increase processing time
-4. **Memory**: Large databases may require substantial RAM; monitor system resources
-
-## Workflow
-
-1. **Input Processing**: Reads FASTA sequences and determines species classification
-2. **Chunking**: Splits sequences larger than chunk size into manageable pieces
-3. **BLAT Search**: Runs parallel BLAT searches against database files
-4. **Result Combination**: Merges BLAT outputs from all database chunks
-5. **Filtering**: Applies divergence, overlap, and other specified filters
-6. **Output Generation**: Combines all results into final output files
-7. **Cleanup**: Removes intermediate files (if enabled)
-
 ## Troubleshooting
+- 
 
 ## Common Issues
 
