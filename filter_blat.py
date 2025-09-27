@@ -5,56 +5,56 @@
 
 import pandas as pd
 import sys
-#from phylorank import Tree
 from ete3 import Tree
 import subprocess
 import glob
 import os
 import tempfile
 import bisect
-from seq_id_index import *
+from build_database_index import *
 from Bio import SeqIO
+
+# Global length cache
+_sequence_length_cache = {}
 
 def get_path(sp, tree):
     if sp == "unclassified":
         return "NA"
+
     sp = "_".join(sp.split(" "))
-    sp = "'"+sp+"'"
+    sp = "'" + sp + "'"
 
     try:
         path = tree & sp
+        return path
     except:
         first = sp.split("_")
         try:
             new = first[0] + "_" + first[1] + "'"
-            #print("new1", new)
             path = tree & new
+            return path
         except:
             try: 
                 new = first[0] + "'"
-                #print("new2", new)
                 path = tree & new
+                return path
             except:
                 #if all else fails, find the first instance of the name within another name
                 for node in tree.traverse("preorder"):
                     if first[0] in node.name:
                         return node
-                #print("sp not found", sp)
                 return "NA"
-    return path
 
 #this is taken from PAReTT and altered
 def get_div(path1, path2, tree):
-    #print(sp1, sp2)
-    #path1 = get_path(sp1, tree)
-    #path2 = get_path(sp2, tree)
-    #print(sp1, sp2)
     if path1 == "NA" or path2 == "NA":
         return "unk:unable_to_find_ref_species_in_tree"
 
-    distance = path1.get_distance(path2)
-    
-    return distance
+    try:
+        distance = path1.get_distance(path2)
+        return distance
+    except:
+        return "unk:unable_to_find_ref_species_in_tree"
 
 def process_kraken(hash_table, seq_id):
     """
@@ -65,16 +65,21 @@ def process_kraken(hash_table, seq_id):
     #print("seq_id", seq_id)
     try:
         species = lookup_species(hash_table, seq_id)
-        return species
+        return species if species else "unclassified"
     except Exception as e:
         print(f"Error when finding {seq_id}: {e}")
         return "unclassified"
 
 def count_basepairs(fasta_path):
-    total = 0
-    for record in SeqIO.parse(fasta_path, "fasta"):
-        total += len(record.seq)
-    return total
+    if fasta_path in _sequence_length_cache:
+        return _sequence_length_cache[fasta_path]
+    try:
+        total = sum(len(record.seq) for record in SeqIO.parse(fasta_path, "fasta"))
+        _sequence_length_cache[fasta_path] = total
+        return total
+    except:
+        _sequence_length_cache[fasta_path] = 0
+        return 0
 
 def calculate_distance(seq1, seq2):
     """
@@ -110,8 +115,9 @@ def calculate_distance(seq1, seq2):
             return float(ani_value)
         else:
             #raise ValueError("Unexpected output format from skani.")
-            #that means nothing was found, so ANI is 0
-            return 0
+            #that means nothing was found, so we don't want this value
+            return -1
+
     except (IndexError, ValueError, subprocess.CalledProcessError) as e:
         print(f"Error running skani: {e}")
         return "unk:skani_err"  # Return 0 in case of errors
@@ -129,8 +135,6 @@ def extract_2bit_fasta(ref_id, kraken, blat_db):
     with tempfile.NamedTemporaryFile(prefix = f"reference_{ref_id}", suffix=".fa", delete=False) as ref_fasta:
         ref_fasta_name = ref_fasta.name
         subprocess.run(["twoBitToFa", ref_2bit_file, "-seq=" + ref_id, ref_fasta_name], check=True)
-        #print(ref_fasta_name)
-        #input("Press Enter after checking the file...") #pause the program so I can check the contents of the ref_file
     return ref_fasta_name
 
 def find_ani(q_seq, ref_id, blat_db, kraken):
@@ -146,7 +150,7 @@ def find_ani(q_seq, ref_id, blat_db, kraken):
     - float: ANI value (or None if reference is not found).
     """
     ref_fasta_name = extract_2bit_fasta(ref_id, kraken, blat_db)
-        
+
     distance = calculate_distance(q_seq, ref_fasta_name)
     
     os.remove(ref_fasta_name)
@@ -198,18 +202,18 @@ def filter_blat(inf, outf, q_species, kraken, tree, q_seq, blat_db, minIdentity)
                 div = "unk:unable_to_find_ref_species_in_tree"
 
             ani = "NA" #ani is NA for now unless defined later
-            if div == 0:
-                continue  # Skip lines with zero divergence time
-            elif type(div) == str: #if div is unk, then find ani
+            if isinstance(div, (int, float)) and div < 1:
+                continue  # Skip lines with less than 1 MYA
+            elif isinstance(div, str): #if div is unk, then find ani
                 ani = find_ani(q_seq, ref_id, blat_db, kraken) 
                 #print("ani calculated:", ani)
-                if type(ani) != str and ani >= 95:
-                    continue #skip lines with 95 or more ani since that means they are same species
+                if isinstance(ani, (int, float)):
+                    if ani < 0 or ani >= 95:
+                        continue #skip lines with 95 or more ani since that means they are same species
+                        # also skip lines where ani is unknown, since there is no way to know its relation to the query
         
-            
             # Write the line with the added divergence time, query species, and reference species
-            new_line = columns #columns[9:]
-            new_line = "\t".join(new_line)
+            new_line = "\t".join(columns)
             outfile.write(new_line.strip() + f"\t{perIdent}\t{q_species}\t{ref_species}\t{div}\t{ani}\n")
 
 
@@ -219,7 +223,6 @@ if __name__ == "__main__":
         print("Usage: python3 filter_blat.py <input psl file> <output .tsv file> <query species (make sure _ instead of space)> <gtdb seq species index .pkl> <div tree> <input sequence> <blat db> <minIdentity>")
         sys.exit(1)
 
-    # Usage example:
     input_file = sys.argv[1]
     output_file = sys.argv[2]
     q_species = sys.argv[3]
@@ -230,10 +233,3 @@ if __name__ == "__main__":
     kraken = load_hash_table(kraken)
     minIdentity = sys.argv[8]
     filter_blat(input_file, output_file, q_species, kraken, tree, q_seq, blat_db, minIdentity)
-    
-
-#kraken = /usr1/shared/all_gtdb_id_and_kraken_species.txt
-#tree = /usr1/shared/TimeTree_v5_Final.nwk
-
-#in pwd /usr1/gouallin/blastdiver/blat
-#python3 filter_blat.py blat_test_output100.psl filtered_blat_100.psl Klebsiella_pneumoniae_subsp._pneumoniae /usr1/shared/all_gtdb_id_and_kraken_species.txt /usr1/shared/TimeTree_v5_Final.nwk

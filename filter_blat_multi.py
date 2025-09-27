@@ -5,7 +5,7 @@ import subprocess
 import os
 from pathlib import Path
 import glob
-from seq_id_index import *
+from build_database_index import *
 
 def filter_blat_multi(infiles, outf, q_species, kraken, tree, q_seq, blat_db):
     """

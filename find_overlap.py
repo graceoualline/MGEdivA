@@ -68,7 +68,7 @@ def compress(input_file):
         s_cur, e_cur, species_cur, row_cur = int(rows[i][qs]), int(rows[i][qe]), rows[i][rsp], list(rows[i])
         
     
-    for row in rows[i:]:
+    for row in rows[i+1:]:
         s2, e2, species2, row2 = int(row[qs]), int(row[qe]), row[rsp], list(row)
         # if this new species is unclassified, just add it and move on
         if species2 == "unclassified":
@@ -117,6 +117,11 @@ def find_overlap(rows, output_file, blat_db, gtdb_index):
         if rows[i] in used:
             continue
         s1, e1, species1, row1 = int(rows[i][qs]), int(rows[i][qe]), rows[i][rsp], rows[i]
+        
+        #if the next row just doesnt overlap at all with the current, no one will overlap with the current, discard
+        if i + 1 < len(rows) and  e1 < int(rows[i+1][qs]):
+            continue
+        
         #find the row with the most overlap that does not share a species
         for j in range(i+1, len(rows)):
             #print("j", j)
@@ -124,6 +129,9 @@ def find_overlap(rows, output_file, blat_db, gtdb_index):
                 continue
 
             s2, e2, species2, row2 = int(rows[j][qs]), int(rows[j][qe]), rows[j][rsp], rows[j]
+            if e1 < s2:
+                break
+            
             new_start, new_end = max(s1, s2), min(e1, e2)
 
             if overlaps(s1, e1, s2, e2):

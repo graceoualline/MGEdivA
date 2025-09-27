@@ -61,8 +61,6 @@ def combine_and_cleanup_psl_files(args):
                 if remove: os.remove(fname)
         if remove: os.rmdir(output_chunk_dir)
 
-        #print(f"Combined {len(input_files)} files into {combined_path}.")
-
 def run_div_filter(job):
     all_blat_raw, output_file, species, index, tree, tmp_fasta_path, database, minIdentity = job
     index = load_hash_table(index)
@@ -433,6 +431,7 @@ def main():
     #remove all of the tmp fastas that were created
     for tmp in tmp_fastas:
         os.remove(tmp)
+        
     print("BLATDIVER FINISHED")
 
     print("Endtime time:", datetime.now())

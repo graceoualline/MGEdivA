@@ -6,7 +6,7 @@ import subprocess
 import os
 from pathlib import Path
 import glob
-from seq_id_index import *
+from build_database_index import *
 from filter_blat_multi import *
 from find_overlap_and_div import *
 from extract_species_from_kraken import *

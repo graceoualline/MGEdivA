@@ -40,16 +40,6 @@ def get_seq_id_loc(two_bit_dir, input_files):
     print(f"Found {len(seq_id_loc)} total sequences")
     return seq_id_loc
 
-def extract_2bit_fasta(seq_id, two_bit_file):
-    
-    # Step 2: Extract the reference sequence from the identified .2bit file
-    with tempfile.NamedTemporaryFile(prefix = f"{seq_id}", suffix=".fa", delete=False) as seq_fasta:
-        seq_fasta_name = seq_fasta.name
-        subprocess.run(["twoBitToFa", two_bit_file, "-seq=" + seq_id, seq_fasta_name], check=True)
-    
-        #input("Press Enter after checking the file...") #pause the program so I can check the contents of the ref_file
-    return seq_fasta_name
-
 def combine_seq_spec_loc(species_file, seq_id_loc, two_bit_dir):
     # Step 1: Load species data into a dictionary
     seq_to_species = {}
@@ -82,6 +72,31 @@ def combine_seq_spec_loc(species_file, seq_id_loc, two_bit_dir):
             result_dict[seq_id] = (species, file_location)
 
     return result_dict
+
+def load_hash_table(index_file):
+    """
+    Loads the precomputed hash table from a binary file.
+    :param index_file: Path to the stored hash table
+    :return: Dictionary {seq_id: species}
+    """
+    with open(index_file, "rb") as f:
+        return pickle.load(f)
+
+def lookup_species(hash_table, seq_id):
+    """
+    Looks up the species name for a given seq_id using the hash table.
+    Returns "unclassified" if not found.
+    """
+    tuple = hash_table.get(seq_id, "unclassified")
+    return tuple[0]
+
+def lookup_location(hash_table, seq_id):
+    """
+    Looks up the species name for a given seq_id using the hash table.
+    Returns "unclassified" if not found.
+    """
+    tuple = hash_table.get(seq_id, "unclassified")
+    return tuple[1]
 
 if __name__ == "__main__":
     if len(sys.argv) != 4:
