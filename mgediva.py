@@ -1,4 +1,4 @@
-# blatdiver for optimized threading
+# mgediva for optimized threading
 # will run all blat db on different threads
 # then run filters on all results on different threads
 # combine all results, filters and blat output into one file
@@ -19,7 +19,7 @@ from extract_species_from_kraken import *
 from tqdm import tqdm
 from remove_large_gaps import *
 from find_overlap import *
-from combine_blatdiver_output import *
+from combine_mgediva_output import *
 from find_overlap_and_div import *
 from parse_args import *
 
@@ -30,7 +30,7 @@ def combine_and_cleanup_psl_files(args):
     if os.path.exists(combined_path):
         print(f"Skipping {combined_path}, already exists.")
     else:
-        input_files = glob.glob(os.path.join(output_chunk_dir, "*.psl")) # test_blatdiver/chunk_0_emrk/*.psl
+        input_files = glob.glob(os.path.join(output_chunk_dir, "*.psl")) 
 
         with open(combined_path, "w") as outfile:
             outfile.write("match\tmismatch\trep. match\tN's\tQ gap count\tQ gap bases\tT gap count\tT gap bases\tstrand\tQ name\tQ size\tQ start\t Q end\tT name\tT size\tT start\tT end\tblock count\tblockSizes\tqStarts\ttStarts\n")
@@ -82,13 +82,13 @@ def run_all_filters(chunk_jobs, c: Config):
         if not(os.path.exists(all_blat_raw)): blat_combine_jobs.append((output_chunk_dir, all_blat_raw, c.remove))
         
         #then filter all blat results and add divergence or ani
-        output_file = os.path.join(c.output_dir, f"chunk_{idx}_{original_id}_blatdiver_output.tsv")
+        output_file = os.path.join(c.output_dir, f"chunk_{idx}_{original_id}_mgediva_output.tsv")
         jobs.append((chunk_record, idx, original_id, species, tmp_fasta_path, all_blat_raw, output_file, c))
 
     output_name = os.path.basename(c.output_dir)
     blat_final_name = os.path.join(c.output_dir, f"{output_name}_blat_results.tsv")
     overlap_div_final_name = os.path.join(c.output_dir, f"{output_name}_overlap_div.tsv")
-    blatdiver_final_name = os.path.join(c.output_dir, f"{output_name}_blatdiver_output.tsv")
+    mgediva_final_name = os.path.join(c.output_dir, f"{output_name}_mgediva_output.tsv")
     overlap_final_name = os.path.join(c.output_dir, f"{output_name}_overlap.tsv")
     
     #first, combine all blat files
@@ -104,7 +104,7 @@ def run_all_filters(chunk_jobs, c: Config):
     
     #run divergence filter
     div_jobs = []
-    if os.path.exists(blatdiver_final_name): print(f"Skipping {blatdiver_final_name}, already exists.")
+    if os.path.exists(mgediva_final_name): print(f"Skipping {mgediva_final_name}, already exists.")
     else:
         for j in jobs:
             chunk_record, idx, original_id, species, tmp_fasta_path, all_blat_raw, output_file, c = j
@@ -130,19 +130,19 @@ def run_all_filters(chunk_jobs, c: Config):
         make_overlap_div = False
     filter_jobs = []
     for j in jobs:
-        chunk_record, idx, original_id, species, tmp_fasta_path, all_blat_raw, blatdiver_output_file, c = j
+        chunk_record, idx, original_id, species, tmp_fasta_path, all_blat_raw, mgediva_output_file, c = j
 
         #overlap filter
         if make_overlap:
             overlap = os.path.join(c.output_dir, f"chunk_{idx}_{original_id}_overlap.tsv")
             if os.path.exists(overlap): print(f"Skipping {overlap}, already exists.")
-            else: filter_jobs.append(("overlap", (blatdiver_output_file, overlap, c.database, c.index)))
+            else: filter_jobs.append(("overlap", (mgediva_output_file, overlap, c.database, c.index)))
 
         # overlap div filter
         if make_overlap_div:
             overlap_div = os.path.join(c.output_dir, f"chunk_{idx}_{original_id}_overlap_div.tsv")
             if os.path.exists(overlap_div): print(f"Skipping {overlap_div}, already exists.")
-            else: filter_jobs.append(("overlap_div", (blatdiver_output_file, overlap_div, c.tree, c.database, c.index)))
+            else: filter_jobs.append(("overlap_div", (mgediva_output_file, overlap_div, c.tree, c.database, c.index)))
     
     #run this first round of filtering
     if len(filter_jobs) > 0:
@@ -218,9 +218,9 @@ def combine_all_results(c: Config):
     #once all jobs are finished, combine all of the filters into one place:
     parent_dir = os.path.dirname(c.output_dir)
     output_name = os.path.basename(c.output_dir)
-    #python3 combine_blatdiver_output.py <blatdiver_output_directory> <chunk_size> <which files to combine ex. *blatdiver_output.tsv> <output_file>
+    #python3 combine_mgediva_output.py <mgediva_output_directory> <chunk_size> <which files to combine ex. *mgediva_output.tsv> <output_file>
     input_output = [("blat_output.tsv", os.path.join(c.output_dir, f"{output_name}_blat_results.tsv")),
-                    ("blatdiver_output.tsv", os.path.join(c.output_dir, f"{output_name}_blatdiver_output.tsv"))]
+                    ("mgediva_output.tsv", os.path.join(c.output_dir, f"{output_name}_mgediva_output.tsv"))]
     if c.overlap_div_filter:
         input_output.append(("overlap_div.tsv", os.path.join(c.output_dir, f"{output_name}_overlap_div.tsv")))
     if c.overlap_filter:
@@ -408,7 +408,7 @@ def main():
     for tmp in tmp_fastas:
         os.remove(tmp)
         
-    print("BLATDIVER FINISHED")
+    print("MGEDIVA FINISHED")
 
     print("Endtime time:", datetime.now())
     
