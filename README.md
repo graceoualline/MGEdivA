@@ -1,16 +1,16 @@
-# Blatdiver
+# MGEdivA
 
 A parallelized sequence alignment tool that uses BLAT and divergence to find Mobile Genetic Elements (MGEs) within sequences.
 
 ## Overview
 
-Blatdiver is designed to find novel MGEs through optimized threading of BLAT (BLAST-Like Alignment Tool) operations, and advanced filtering. It splits large sequences into manageable chunks, runs BLAT searches in parallel across multiple database files, and applies divergence filtering and sequence analysis to identify potential MGEs. The tool is particularly effective for horizontal gene transfer detection.
+MGEdivA is designed to find novel MGEs through optimized threading of BLAT (BLAST-Like Alignment Tool) operations, and advanced filtering. It splits large sequences into manageable chunks, runs BLAT searches in parallel across multiple database files, and applies divergence filtering and sequence analysis to identify potential MGEs. The tool is particularly effective for horizontal gene transfer detection.
 
 ## Installation
-Install blatdiver:
+Install MGEdivA:
 ```bash
-git clone https://github.com/graceoualline/blatdiver.git
-cd blatdiver
+git clone https://github.com/graceoualline/MGEdivA.git
+cd mgediva
 ```
 Install supporting files and databases here: (PUT LINK TO LARGER FILES)
 You should have the following:
@@ -56,22 +56,36 @@ kraken2-build --clean --db kraken2_custom_db
 ### Quick Start
 
 ```bash
-python3 blatdiver.py -q input.fasta -o output_directory -d /path/to/blat_database -tr TimeTree_v5_Final.nwk -i database_index.txt -k /path/to/kraken_db --threads 20
+# To see all input parameters
+python3 mgediva.py -h
+
+# command line with only required arguments
+python3 mgediva.py -q input.fasta -o output_directory -d /path/to/blat_database -tr TimeTree_v5_Final.nwk -i database_index.txt -k /path/to/kraken_db --threads 20
+
+# with config
+python mgediva.py --config config_example.yaml
+
+# with config and command line. Command-line arguments take priority over config file values.
+python mgediva.py --config config_example.yaml -q input.fasta -o output_directory --threads 20
 ```
 #### Ready-to-Run Example (only on FAUST) 
 ```bash
-python /usr1/gouallin/blat/blat_pipeline/blatdiver.py \
+# with config
+python3  /usr1/gouallin/blat/blat_pipeline/mgediva.py --config /usr1/gouallin/blat/blat_pipeline/config_example.yaml
+
+# command line only
+python3 /usr1/gouallin/blat/blat_pipeline/mgediva.py \
   -q /usr1/gouallin/blat/blat_pipeline/test/acrB.fasta \
-  -o blatdiver_test_results_acrB \
+  -o mgediva_test_results_acrB \
   -d /usr1/shared/gtdb_2bil_split_2bit/ \
   -tr /usr1/shared/TimeTree_v5_Final.nwk \
   -i /usr1/shared/gtdb_2bil_seq_id_species_loc_index.pkl \
   -k /usr1/shared/kraken2_custom_db/ \
   -t 20 \
-  -r 0 \
+  --no-remove \
   -minIdentity 90 \
-  -overlap_filter 1 \
-  -overlap_div_filter 1
+  --overlap_filter \
+  --overlap_div_filter
 ```
 ### Parameters
 
@@ -86,18 +100,41 @@ python /usr1/gouallin/blat/blat_pipeline/blatdiver.py \
 #### Optional Arguments
 - `-t, --threads`: Number of threads to use (default: 1) - **Highly recommend using more threads to speed up the program.**
 - `-c, --chunk`: Chunk size for sequence splitting (default: 100,000 bp)
-- `-r, --remove`: Clean up intermediate files (1=True, 0=False, default: 1)
 - `-s, --species`: Predefined species name (replace spaces with '_'). For multifasta files, applies to all sequences.
 - `-minScore`: Minimum BLAT alignment score (default: 30)
 - `-minIdentity`: Minimum percent identity threshold (default: 0)
-- `-overlap_filter`: Enable overlap filtering (1=True, 0=False, default: 0)
-- `-overlap_div_filter`: Enable overlap and divergence filtering (1=True, 0=False, default: 0)
+- `--remove, --no-remove`: Clean up temporary files (default: True). Use --remove to enable, --no-remove to disable.
+- `--overlap-filter, --no-overlap-filter`: Enable overlap filter (default: False). Use --overlap-filter to enable, --no-overlap-filter to disable.
+- `--overlap-div-filter, --no-overlap-div-filter`: Enable overlap and divergence filter (default: False). Use --overlap-div-filter to enable, --no-overlap-div-filter to disable.
+
+#### Config File
+There is an option for a config file, as the majoriy of parameters are likely reused in each run. An example config file is available in `config_example.yaml`. Here is an example config file:
+```
+# Example config, for MGEdivA.
+# Required arguments:
+query: test/acrB.fasta
+output: mgediva_test_results_acrB
+database: gtdb_2bil_split_2bit/
+index: gtdb_2bil_seq_id_species_loc_index.pkl
+kraken: kraken2_custom_db/ 
+tree: TimeTree_v5_Final.nwk 
+
+# Optional Arguments
+chunk: 100000
+threads: 46
+remove: true
+species: null
+minScore: 30
+minIdentity: 95 
+overlap_filter: false
+overlap_div_filter: false
+```
 
 ### Example Commands
 
 #### Basic Command with GTDB-Blat Database and 20 threads
 ```bash
-python blatdiver.py \
+python mgediva.py \
   -q my_sequences.fasta \
   -o results_dir \
   -d gtdb_2bil_split_2bit \
@@ -109,7 +146,7 @@ python blatdiver.py \
 
 #### Run with additional filtering:
 ```bash
-python blatdiver.py \
+python mgediva.py \
   -q my_sequences.fasta \
   -o results_dir \
   -d gtdb_2bil_split_2bit \
@@ -117,41 +154,41 @@ python blatdiver.py \
   -i  gtdb_2bil_seq_id_species_loc_index.pkl \
   -k kraken2_custom_db \
   -t 20 \
-  -overlap_filter 1 \
-  -overlap_div_filter 1 \
+  --overlap_filter \
+  --overlap_div_filter \
   -minIdentity 95
 ```
 ## Filters
 Filters are described in further detail, and their processes are illustrated in our paper (add cite).
 ### Divergence Filtering
-- Divergence filtering is the main method for detecting MGEs and produces the file ```{output_name}_blatdiver_output.tsv```.
+- Divergence filtering is the main method for detecting MGEs and produces the file ```{output_name}_mgediva_output.tsv```.
 - By examining the species of the query genome and the genome it aligned to, we use the TimeTree of Life to calculate the divergence time between the two species. If the species diverged over 1 million years ago (```divergence >= 1 MYA```), the alignment is retained.
 - This filter is effective at identifying horizontal gene transfer events because MGEs transferred between distantly related species will show high sequence similarity despite ancient species divergence.
 - For detailed information on how this filter detects MGEs, please refer to our paper: (citation tba).
 ### Additional filtering
-These filters further refine the alignments that were identified as divergently distant in ```{output_name}_blatdiver_output.tsv```:
+These filters further refine the alignments that were identified as divergently distant in ```{output_name}_mgediva_output.tsv```:
 #### Overlap Filtering
-- Enabling ```-overlap_filter 1``` produces the file ```{output_name}_overlap.tsv```
-- This filter processes the results from ```{output_name}_blatdiver_output.tsv```
+- Enabling ```--overlap_filter``` produces the file ```{output_name}_overlap.tsv```
+- This filter processes the results from ```{output_name}_mgediva_output.tsv```
 - It identifies two alignments that overlap spatially on the query sequence but originate from different species
-- While effective at reducing false positives, it also reduces blatdiver's sensitivity for detecting true MGEs (see paper for details)
+- While effective at reducing false positives, it also reduces mgediva's sensitivity for detecting true MGEs (see paper for details)
 #### Overlap Divergence Filtering
-- Enabling ```-overlap_div_filter 1``` produces the file ```{output_name}_overlap_div.tsv```
-- This filter processes the results from {output_name}_blatdiver_output.tsv
+- Enabling ```--overlap_div_filter``` produces the file ```{output_name}_overlap_div.tsv```
+- This filter processes the results from {output_name}_mgediva_output.tsv
 -This filter identifies overlapping alignments where the source species are divergently distant (>= 1 MYA) 
 - It is the most stringent filter that effectively reduces false positives but may decrease sensitivity for detecting true MGEs and requires longer processing time.
 - Recommended for high-confidence MGE detection when processing time is not a constraint
 
 ## Output Files
-blatdiver generates several output files in the specified output directory:
+mgediva generates several output files in the specified output directory:
 
 - `{output_name}_blat_results.tsv`: Raw BLAT alignment results
-- `{output_name}_blatdiver_output.tsv`: Filtered results with divergence information
+- `{output_name}_mgediva_output.tsv`: Filtered results with divergence information
 - `{output_name}_overlap.tsv`: Overlap-filtered results (if enabled)
 - `{output_name}_overlap_div.tsv`: Overlap and divergence filtered results (if enabled)
 
 ### Resume Functionality
-Important: The program is designed to resume from interruptions by checking for existing files. If a run is stopped prematurely, it will restart from where it left off. Avoid creating files with names that could overlap with blatdiver's output to prevent conflicts.
+Important: The program is designed to resume from interruptions by checking for existing files. If a run is stopped prematurely, it will restart from where it left off. Avoid creating files with names that could overlap with mgediva's output to prevent conflicts.
 
 ## Database Setup
 
@@ -206,7 +243,7 @@ This creates an index where ```index[seq_id] = (species, location)```.
 ## Performance Tips
 1. Use Multiple Threads: Set -t to utilize available CPU cores (recommended: 10-20 threads)
 2. Optimal Chunk Size: Default 100kb works well; adjust based on sequence lengths. Increasing chunk size will significantly down the program.
-3. Enable Filtering Judiciously: Enabling overlap and overlap divergence filters will decrease false positives, but will also cause blatdiver ot miss more MGEs. Overlap divergence takes a long time to run.
+3. Enable Filtering Judiciously: Enabling overlap and overlap divergence filters will decrease false positives, but will also cause mgediva ot miss more MGEs. Overlap divergence takes a long time to run.
 4. Monitor Resources: Large databases require substantial RAM
 5. Resume Feature: Take advantage of the resume capability for long runs
 
@@ -219,7 +256,7 @@ This creates an index where ```index[seq_id] = (species, location)```.
 
 ## Citation
 
-If you use blatdiver in your research, please cite:
+If you use mgediva in your research, please cite:
 [Add later]
 
 ## Support
