@@ -1,0 +1,19 @@
+# Example config, for MGEdivA.
+
+# Required arguments:
+query: /usr1/gouallin/blat/blat_pipeline/test/acrB.fasta
+output: mgediva_test_results_acrB
+database: /usr1/shared/gtdb_2bil_split_2bit/ # blat database
+index: /usr1/shared/gtdb_2bil_seq_id_species_loc_index.pkl #index that maps sequences in the database to their species and locations
+kraken: /usr1/shared/kraken2_custom_db/ # path to the kraken database
+tree: /usr1/shared/TimeTree_v5_Final.nwk 
+
+# Optional Arguments
+chunk: 100000 # how we want to split up the query to run in blat
+threads: 46 # number of threads the user wants to use, HIGHLY RECOMMEND increasing this value
+remove: true # will delete intermediate files as the program goes on
+species: null # user defined species of all of the sequences given in a query, null if unknown
+minScore: 30 # Is the minimum alignment score threshold, sets blat's parameter -minScore, default 30
+minIdentity: 95 # Is the threshold of the minimum percent identity a hit must have. Default: 95. Percent identity = ( match / Q_end - Q_start )*100
+overlap_filter: false # Is false when you do not want to also do an overlap filter
+overlap_div_filter: false # is false when you do not want to do an overlap and divergence filter

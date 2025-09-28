@@ -16,31 +16,12 @@ from blat_main import *
 from datetime import datetime
 from functools import partial
 from extract_species_from_kraken import *
-import argparse
 from tqdm import tqdm
-from dataclasses import dataclass
-from pathlib import Path
 from remove_large_gaps import *
 from find_overlap import *
 from combine_blatdiver_output import *
 from find_overlap_and_div import *
-
-@dataclass
-class Config:
-    input_fasta: str #query fasta
-    chunk_size: int # how we want to split up the query to run in blat
-    output_dir: str # output dir name
-    database: Path # blat database
-    index: str #index that maps sequences in the database to their species and locations
-    max_threads: int # number of threads the user wants to use
-    kraken_db: Path # path to the kraken database
-    tree: str # the time tree of life tree
-    remove: bool # is false when I am debugging and dont want files to be deleted
-    species: str # user defined species of all of the sequences given in a query
-    minScore: int # Is the minimum alignment score threshold, sets blat's parameter -minScore, default 30
-    minIdentity: int # Is the threshold of the minimum percent identity a hit must have. Default: 95. Percent identity = ( match / Q_end - Q_start )*100
-    overlap_filter: bool # Is false when you do not want to also do an overlap filter
-    overlap_div_filter: bool # is false when you do not want to do an overlap and divergence filter
+from parse_args import *
 
 def combine_and_cleanup_psl_files(args):
     header_lines = 5
@@ -336,61 +317,57 @@ def prepare_jobs_parallel(c: Config, n_processes=None):
                 all_tmp_fastas.extend(tmp_fastas)
                 pbar.update()
     
-    return all_chunk_jobs, all_tmp_fastas 
-    
-def parse_args():
-    parser = argparse.ArgumentParser(
-        description="Take a FASTA file and it through blatdiver."
-    )
-    parser.add_argument(
-        "-q", "--query", required = True, help="Path to the query FASTA file")
-    parser.add_argument(
-        "-o", "--output", required = True, help="Name of your output")
-    parser.add_argument(
-        "-d", "--database", required = True, help="Path to the blat database to use")
-    parser.add_argument(
-        "-tr", "--tree", required = True, help="The Time Tree of Life tree TimeTree_v5_Final.nwk")
-    parser.add_argument(
-        "-i", "--index", required = True, help="Index of sequences in your blat db and their species and locations")
-    parser.add_argument(
-        "-k", "--kraken", required = True, help="Path to Kraken2 database")
-    parser.add_argument(
-        "-t", "--threads", type=int, help="Specify the number of threads you want to use. Highly recommended to use multiple threads to decrease time. Default: 1")
-    parser.add_argument(
-        "-c", "--chunk", type=int, help="If you want to specify the size of the how we will split the sequence to feed it to blat, Default: 100000")
-    parser.add_argument(
-        "-r", "--remove", type = int, help = "If you don't want the program to clean up its files, set to 0. Default: 1 (True)")
-    parser.add_argument(
-        "-s", "--species", type = str, help = "If you know the species of your sequence, or all sequences, you can define it here (make sure spaces are replaced with '_'. If you are feeding in multiple species within one query, this will assume they are all the same species")
-    parser.add_argument(
-        "-minScore", type = int, help = "Is the minimum alignment score threshold, sets blat's parameter -minScore, default 50")
-    parser.add_argument(
-        "-minIdentity", type = int, help = "Is the threshold of the minimum percent identity a hit must have. Default: 0. Percent identity = ( match / Q_end - Q_start )*100")
-    parser.add_argument(
-        "-overlap_filter", type = int, help = "If you want to do additional filtering with the overlap filter, set to 1. Default: 0 (Filter explained in https://github.com/graceoualline/blatdiver/)")
-    parser.add_argument(
-        "-overlap_div_filter", type = int, help = "If you want to do additional filtering with the overlap and divergence filter, set to 1. Default: 0 (Filter explained in https://github.com/graceoualline/blatdiver/)")
-
-    return parser.parse_args()
+    return all_chunk_jobs, all_tmp_fastas   
 
 def main():
     args = parse_args()
+
+    config_data = {}
+    if args.config:
+        config_data = load_config_file(args.config)
+        if config_data:  # Only validate if config was successfully loaded
+            validate_config_keys(config_data)
+            print(f"Loaded and validated configuration from: {args.config}")
+        else:
+            print(f"Warning: Config file {args.config} was empty or could not be loaded")
+    
+    # Merge config file and command line arguments
+    merged_config = merge_config_and_args(args, config_data)
+    
+    # Validate required parameters
+    if not validate_required_params(merged_config):
+        return
+
     c = Config(
-    input_fasta=args.query,
-    chunk_size=args.chunk if args.chunk else 100000,
-    output_dir=args.output,
-    database = Path(args.database),
-    index = args.index,
-    max_threads=args.threads if args.threads else 1,
-    kraken_db = args.kraken,
-    tree = Tree(args.tree),
-    remove = bool(args.remove) if args.remove == 0 else True,
-    species = args.species if args.species else None,
-    minScore = args.minScore if args.minScore else 30,
-    minIdentity = args.minIdentity if args.minIdentity else 0,
-    overlap_filter = bool(args.overlap_filter) if args.overlap_filter==1 else False,
-    overlap_div_filter = bool(args.overlap_div_filter) if args.overlap_div_filter==1 else False
+        input_fasta=merged_config['query'],
+        chunk_size=merged_config['chunk'],
+        output_dir=merged_config['output'],
+        database=Path(merged_config['database']),
+        index=merged_config['index'],
+        max_threads=merged_config['threads'],
+        kraken_db=merged_config['kraken'],
+        tree=Tree(merged_config['tree']),
+        remove=merged_config['remove'],
+        species=merged_config['species'],
+        minScore=merged_config['minScore'],
+        minIdentity=merged_config['minIdentity'],
+        overlap_filter=merged_config['overlap_filter'],
+        overlap_div_filter=merged_config['overlap_div_filter']
     )
+
+    print("Configuration:")
+    print(f"  Input FASTA: {c.input_fasta}")
+    print(f"  Output Directory: {c.output_dir}")
+    print(f"  Database: {c.database}")
+    print(f"  Threads: {c.max_threads}")
+    print(f"  Chunk Size: {c.chunk_size}")
+    print(f"  Species: {c.species or 'Auto-detect with Kraken'}")
+    print(f"  Min Score: {c.minScore}")
+    print(f"  Min Identity: {c.minIdentity}")
+    print(f"  Overlap Filter: {c.overlap_filter}")
+    print(f"  Overlap Div Filter: {c.overlap_div_filter}")
+    print(f"  Clean up files: {c.remove}\n")
+    assert(False)
 
     if not os.path.exists(c.output_dir):
         os.makedirs(c.output_dir)
