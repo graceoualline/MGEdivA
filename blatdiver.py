@@ -333,7 +333,7 @@ def main():
     
     # Merge config file and command line arguments
     merged_config = merge_config_and_args(args, config_data)
-    
+
     # Validate required parameters
     if not validate_required_params(merged_config):
         return
@@ -367,7 +367,6 @@ def main():
     print(f"  Overlap Filter: {c.overlap_filter}")
     print(f"  Overlap Div Filter: {c.overlap_div_filter}")
     print(f"  Clean up files: {c.remove}\n")
-    assert(False)
 
     if not os.path.exists(c.output_dir):
         os.makedirs(c.output_dir)
