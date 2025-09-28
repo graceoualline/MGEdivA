@@ -68,7 +68,7 @@ python mgediva.py --config config_example.yaml
 # with config and command line. Command-line arguments take priority over config file values.
 python mgediva.py --config config_example.yaml -q input.fasta -o output_directory --threads 20
 ```
-#### Ready-to-Run Example (only on FAUST) 
+#### Ready-to-Run Example (only on FAUST) Will take ~25 minutes.
 ```bash
 # with config
 python3  /usr1/gouallin/blat/blat_pipeline/mgediva.py --config /usr1/gouallin/blat/blat_pipeline/config_example.yaml
