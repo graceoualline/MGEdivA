@@ -1,7 +1,6 @@
 # MGEdivA
 
-A parallelized sequence alignment tool that uses BLAT and divergence to find Mobile Genetic Elements (MGEs) within sequences.
-
+**M**obile **G**enetic **E**lement finder using **DIV**ergence and **A**lignment. A parallelized sequence alignment tool for detecting Mobile Genetic Elements (MGEs) using BLAT and phylogenetic divergence analysis.
 ## Overview
 
 MGEdivA is designed to find novel MGEs through optimized threading of BLAT (BLAST-Like Alignment Tool) operations, and advanced filtering. It splits large sequences into manageable chunks, runs BLAT searches in parallel across multiple database files, and applies divergence filtering and sequence analysis to identify potential MGEs. The tool is particularly effective for horizontal gene transfer detection.
@@ -90,44 +89,49 @@ python3 /usr1/gouallin/blat/blat_pipeline/mgediva.py \
 ### Parameters
 
 #### Required Arguments
-- `-q, --query`: Path to the query FASTA file
-- `-o, --output`: Name of your output directory
-- `-d, --database`: Path to the BLAT database directory
-- `-tr, --tree`: Path to the TimeTree of Life tree file (TimeTree_v5_Final.nwk)
-- `-i, --index`: Index file mapping sequences in BLAT database to species and locations
-- `-k, --kraken`: Path to Kraken2 database
+| Parameter | Description |
+|-----------|-------------|
+| `-q, --query`| Path to the query FASTA file |
+| `-o, --output`| Name of your output directory 
+| `-d, --database`| Path to the BLAT database directory| |
+| `-tr, --tree`| Path to the TimeTree of Life tree file (TimeTree_v5_Final.nwk) |
+| `-i, --index`| Index file mapping sequences in BLAT database to species and locations |
+| `-k, --kraken`| Path to Kraken2 database |
 
 #### Optional Arguments
-- `-t, --threads`: Number of threads to use (default: 1) - **Highly recommend using more threads to speed up the program.**
-- `-c, --chunk`: Chunk size for sequence splitting (default: 100,000 bp)
-- `-s, --species`: Predefined species name (replace spaces with '_'). For multifasta files, applies to all sequences.
-- `-minScore`: Minimum BLAT alignment score (default: 30)
-- `-minIdentity`: Minimum percent identity threshold (default: 0)
-- `--remove, --no-remove`: Clean up temporary files (default: True). Use --remove to enable, --no-remove to disable.
-- `--overlap-filter, --no-overlap-filter`: Enable overlap filter (default: False). Use --overlap-filter to enable, --no-overlap-filter to disable.
-- `--overlap-div-filter, --no-overlap-div-filter`: Enable overlap and divergence filter (default: False). Use --overlap-div-filter to enable, --no-overlap-div-filter to disable.
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+|`-t, --threads`| 1 | Number of threads to use - **Highly recommend using more threads to speed up the program.**|
+| `-c, --chunk`| 100000| Chunk size for sequence splitting |
+| `-s, --species`| auto-detect| Predefined species name (replace spaces with '_'). For multifasta files, applies to all sequences.|
+| `-minScore`| 30| Minimum BLAT alignment score |
+| `-minIdentity`|0| Minimum percent identity threshold|
+| `--remove, --no-remove`|True| Clean up temporary files. Use --remove to enable, --no-remove to disable.|
+| `--overlap-filter, --no-overlap-filter`|False| Enable overlap filter. Use --overlap-filter to enable, --no-overlap-filter to disable.|
+| `--overlap-div-filter, --no-overlap-div-filter`|False| Enable overlap and divergence filter. Use --overlap-div-filter to enable, --no-overlap-div-filter to disable.|
 
 #### Config File
-There is an option for a config file, as the majoriy of parameters are likely reused in each run. An example config file is available in `config_example.yaml`. Here is an example config file:
-```
-# Example config, for MGEdivA.
-# Required arguments:
-query: test/acrB.fasta
-output: mgediva_test_results_acrB
+Create a YAML configuration file for repeated analyses:
+```yaml
+# MGEdivA Configuration File
+# Required parameters
+query: sequences.fasta
+output: mgediva_results
 database: gtdb_2bil_split_2bit/
+tree: TimeTree_v5_Final.nwk
 index: gtdb_2bil_seq_id_species_loc_index.pkl
-kraken: kraken2_custom_db/ 
-tree: TimeTree_v5_Final.nwk 
+kraken: kraken2_custom_db/
 
-# Optional Arguments
+# Optional parameters
+threads: 20
 chunk: 100000
-threads: 46
-remove: true
-species: null
-minScore: 30
-minIdentity: 95 
+minIdentity: 95
 overlap_filter: false
 overlap_div_filter: false
+remove: true
+species: null  # Auto-detect with Kraken2
+minScore: 30
+minIdentity: 95 
 ```
 
 ### Example Commands
@@ -179,13 +183,50 @@ These filters further refine the alignments that were identified as divergently 
 - It is the most stringent filter that effectively reduces false positives but may decrease sensitivity for detecting true MGEs and requires longer processing time.
 - Recommended for high-confidence MGE detection when processing time is not a constraint
 
-## Output Files
-mgediva generates several output files in the specified output directory:
+### Standard Output
+```
+output_directory/
+├── output_name_blat_results.tsv      # Raw BLAT alignments
+├── output_name_mgediva_output.tsv    # Divergence-filtered results
+├── output_name_overlap.tsv           # Overlap-filtered results (if enabled)
+└── output_name_overlap_div.tsv       # Overlap+divergence filtered (if enabled)
+```
 
-- `{output_name}_blat_results.tsv`: Raw BLAT alignment results
-- `{output_name}_mgediva_output.tsv`: Filtered results with divergence information
-- `{output_name}_overlap.tsv`: Overlap-filtered results (if enabled)
-- `{output_name}_overlap_div.tsv`: Overlap and divergence filtered results (if enabled)
+#### Example output (with remove disabled, and all filtering options on):
+```
+mgediva_test_results_test/
+├── chunk_0_test
+│   ├── chunk_0_test_part_0.psl
+....
+│   └── chunk_0_test_part_136.psl
+├── chunk_1_test
+│   ├── chunk_1_test_part_0.psl
+....
+│   └── chunk_1_test_part_136.psl
+.....
+├── chunk_0_test_blat_output.tsv
+├── chunk_0_test_mgediva_output.tsv
+├── chunk_0_test_overlap_div.tsv
+├── chunk_0_test_overlap.tsv
+├── chunk_1_test_blat_output.tsv
+├── chunk_1_test_mgediva_output.tsv
+├── chunk_1_test_overlap_div.tsv
+├── chunk_1_test_overlap.tsv
+.....
+├── mgediva_test_results_test_blat_results.tsv
+├── mgediva_test_results_test_mgediva_output.tsv
+├── mgediva_test_results_test_overlap_div.tsv
+└── mgediva_test_results_test_overlap.tsv
+```
+chunk_{i}_{output_name} is the directory that will contain all of the raw BLAT output that is run on that chunk of the input sequence. The GTDB-BLAT database is split into 136 pieces to enable efficient parallelization of BLAT. The results are combined, and filtering is done separately for each chunk, generating chunk_{i}_{output_name}_{output or filter type}.tsv for each chunk. Then, at the very end, all chunks are combined into the final output files described above.
+#### Example output (with remove enabled, and all filtering options on):
+```
+mgediva_test_results_acrB/
+├── mgediva_test_results_acrB_blat_results.tsv
+├── mgediva_test_results_acrB_mgediva_output.tsv
+├── mgediva_test_results_acrB_overlap_div.tsv
+└── mgediva_test_results_acrB_overlap.tsv
+```
 
 ### Resume Functionality
 Important: The program is designed to resume from interruptions by checking for existing files. If a run is stopped prematurely, it will restart from where it left off. Avoid creating files with names that could overlap with mgediva's output to prevent conflicts.
