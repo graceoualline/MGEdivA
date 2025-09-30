@@ -5,19 +5,16 @@
 # remove individual chunk files (if sequence over 100kbp)
 # or if there are differerent sequences
 
-
 import os
 import tempfile
 import subprocess
 import multiprocessing as mp
 from multiprocessing import Pool, cpu_count
 from Bio import SeqIO
-from blat_main import *
 from datetime import datetime
 from functools import partial
 from extract_species_from_kraken import *
 from tqdm import tqdm
-from remove_large_gaps import *
 from find_overlap import *
 from combine_mgediva_output import *
 from find_overlap_and_div import *

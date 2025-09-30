@@ -14,19 +14,17 @@ from find_overlap import *
 
 #will keep Q name, Q start, Q end, T name(s), Q spec, T specie(s), divergence time(s), ani
 
-def overlaps(start1, end1, start2, end2):
-    if max(start1, start2) <= min(end1, end2):
-        return min(end1, end2) - max(start1, start2)
-    return None
+# def overlaps(start1, end1, start2, end2):
+#     if max(start1, start2) <= min(end1, end2):
+#         return min(end1, end2) - max(start1, start2)
+#     return None
 
 #if it finds regions that overlap and map to the same species, it will combine them
-
 def get_div_alt(path1, path2, tree):
     if path1 == "NA" or path2 == "NA":
         return "unk:unable_to_find_ref_species_in_tree"
     distance = path1.get_distance(path2)
     return distance
-
 
 def find_overlap_and_div(rows, output_file, tree, blat_db, kraken):
     #"Q name\tQ size\tQ start\tQ end\tT name\tT size\tT start\tT end\tPercent Identity\tQuery Species\tReference Species\tDivergence Time\tANI bt seqs(if div=unk)\tANI bt ref seqs(if species unk)\n")
@@ -111,7 +109,6 @@ def find_overlap_and_div(rows, output_file, tree, blat_db, kraken):
                 new_rows.add("\t".join(new_row))
                 break
             
-
     with open(output_file, "w") as out:
                  #"Q name\tQ size\tQ start\tQ end\tT name\tT size\tT start\tT end\tPercent Identity\tQuery Species\tReference Species\tDivergence Time\tANI bt seqs(if div=unk)
         out.write("Q name\tQ size\tQ start\tQ end\tT name\tT size\tT start\tT end\tPercent Identity\tQuery Species\tReference Species\tDivergence Time\tANI bt seqs(if div=unk)\tDiv bt ref species\tAni bt ref species\n")

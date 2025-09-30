@@ -40,7 +40,6 @@ def get_sp_from_kraken(kraken_output_file):
             print(f"Error parsing Kraken output: {e}")
             return "unclassified"
 
-
 def get_q_species(fasta_file, kraken_db):
     with tempfile.NamedTemporaryFile(prefix="kraken_output", delete=False, mode='w+') as tmp:
         tmp_filename = tmp.name

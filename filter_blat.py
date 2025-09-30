@@ -216,7 +216,6 @@ def filter_blat(inf, outf, q_species, kraken, tree, q_seq, blat_db, minIdentity)
             new_line = "\t".join(columns)
             outfile.write(new_line.strip() + f"\t{perIdent}\t{q_species}\t{ref_species}\t{div}\t{ani}\n")
 
-
 if __name__ == "__main__":
     # Check if the correct number of command-line arguments is provided
     if len(sys.argv) != 9:

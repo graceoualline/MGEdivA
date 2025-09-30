@@ -60,7 +60,6 @@ def adjust_and_merge_tsvs(chunk_dir, chunk_size, output_file, to_combine):
         print(f"Error creating {to_combine}")
         return []
     
-
 if __name__ == "__main__":
     if len(sys.argv) != 5:
         print("Usage: python3 combine_mgediva_output.py <mgediva_output_directory> <chunk_size> <which files to combine ex. *mgediva_output.tsv> <output_file>")
