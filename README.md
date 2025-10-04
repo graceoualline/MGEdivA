@@ -11,11 +11,18 @@ Install MGEdivA:
 git clone https://github.com/graceoualline/MGEdivA.git
 cd mgediva
 ```
-Install supporting files and databases here: (PUT LINK TO LARGER FILES)
+Install supporting files and databases here: 
+TODO: please upload the following files/directories for users to download:
+```
+/usr1/shared/gtdb_2bil_split_2bit/
+/usr1/shared/mgediva_gtdb_2bil_index.pkl
+/usr1/shared/kraken2_custom_db/
+/usr1/shared/TimeTree_v5_Final.nwk
+```
 You should have the following:
 - gtdb_2bil_split_2bit
 - TimeTree_v5_Final.nwk
-- gtdb_2bil_seq_id_species_loc_index.pkl
+- mgediva_gtdb_2bil_index.pkl
 - kraken2_custom_db
 ### Required Python Packages
 ```bash
@@ -233,10 +240,29 @@ Important: The program is designed to resume from interruptions by checking for 
 
 ## Database Setup
 
-### Pre-build GTDB-Blat Database
+#### Kraken and Kraken Database
+We provide the kraken database ```kraken2_custom_db```. If you want to recreate it locally, do the following:
+```bash
+mkdir -p kraken2_custom_db
+
+kraken2-build --download-taxonomy --db kraken2_custom_db
+
+kraken2-build --download-library archaea --db kraken2_custom_db
+kraken2-build --download-library bacteria --db kraken2_custom_db
+kraken2-build --download-library plasmid --db kraken2_custom_db
+kraken2-build --download-library viral --db kraken2_custom_db
+kraken2-build --download-library fungi --db kraken2_custom_db
+kraken2-build --download-library protozoa --db kraken2_custom_db
+kraken2-build --download-library nt --db kraken2_custom_db
+
+kraken2-build --build --db kraken2_custom_db
+kraken2-build --clean --db kraken2_custom_db
+```
+
+#### Pre-build GTDB-Blat Database
 We provide a ready-to-use BLAT-compatible database created from the Genome Taxonomy Database (GTDB):
 - **Database:** ```gtdb_2bil_split_2bit/```
-- **Index:** ```gtdb_2bil_seq_id_species_loc_index.pkl```
+- **Index:** ```mgediva_gtdb_2bil_index.pkl```
 
 ### Creating a Custom Blat database
 -  If you wish to create your own database, follow these steps:
@@ -271,20 +297,21 @@ You can manually edit species assignments in the ```{fasta_file}_seq_species.txt
 #### Step 3: Build the Database Index
 Create a hash table index linking sequence IDs to their location and species:
 ```
-python3 build_database_index.py [blat_db_2bit_dir] [output_index_name.pkl] [{fasta_file}_seq_species.txt]
+python3 build_database_index.py [blat_db_2bit_dir] [output_index_name.pkl] [{fasta_file}_seq_species.txt] [TimeTree_v5_Final.nwk]
 ```
-This creates an index where ```index[seq_id] = (species, location)```.
+This creates an index where ```index[seq_id] = (species, location, species path in tree)```.
+This index is crucial to the pipeline's speed.
 
 ## Required Files Summary
 1. **BLAT Database:** Directory containing .2bit and .ooc files
-2. **Index File:** .pkl file mapping sequence IDs to species and locations
+2. **Index File:** .pkl file mapping sequence IDs to species, locations, and path in the phylogeny tree.
 3. **TimeTree File:** Newick format phylogenetic tree with relevant species
 4. **Kraken Database:** For taxonomic classification
 
 ## Performance Tips
-1. Use Multiple Threads: Set -t to utilize available CPU cores (recommended: 10-20 threads)
-2. Optimal Chunk Size: Default 100kb works well; adjust based on sequence lengths. Increasing chunk size will significantly down the program.
-3. Enable Filtering Judiciously: Enabling overlap and overlap divergence filters will decrease false positives, but will also cause mgediva ot miss more MGEs. Overlap divergence takes a long time to run.
+1. Use Multiple Threads: Set -t to utilize available CPU cores (We use 46 in experimentation, although thread use will depend on one's resources.)
+2. Optimal Chunk Size: Default 100kb works well; adjust based on sequence lengths. Increasing chunk size will significantly slow down the program.
+3. Enable Filtering: Enabling overlap and overlap divergence filters will decrease false positives, but will also cause mgediva to miss more MGEs. Overlap divergence takes a very long time to run.
 4. Monitor Resources: Large databases require substantial RAM
 5. Resume Feature: Take advantage of the resume capability for long runs
 
