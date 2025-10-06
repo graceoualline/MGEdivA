@@ -14,11 +14,6 @@ from find_overlap import *
 
 #will keep Q name, Q start, Q end, T name(s), Q spec, T specie(s), divergence time(s), ani
 
-# def overlaps(start1, end1, start2, end2):
-#     if max(start1, start2) <= min(end1, end2):
-#         return min(end1, end2) - max(start1, start2)
-#     return None
-
 #if it finds regions that overlap and map to the same species, it will combine them
 
 def find_overlap_and_div(rows, output_file, tree, blat_db, index):
@@ -30,8 +25,6 @@ def find_overlap_and_div(rows, output_file, tree, blat_db, index):
     new_rows = set()
     rows = sorted(list(rows), key=lambda x:int(x[qs]))
     used = set()
-    
-    species_set = set(row[rsp] for row in rows)
 
     i = 0
 
@@ -42,13 +35,13 @@ def find_overlap_and_div(rows, output_file, tree, blat_db, index):
             continue
 
         s1, e1, species1 = int(rows[i][qs]), int(rows[i][qe]), rows[i][rsp]
-        path1 = get_path_from_name(lookup_tree_leaf_name(index, row1[tname]), tree)
-        # Cache species path
-        # Use binary search to find potential overlapping rows
-        # Only check rows that start before or at e1
-        max_search_idx = bisect.bisect_right(start_positions, e1)
         
-        for j in range(i+1, max_search_idx):
+        if i + 1 < len(rows) and  e1 < int(rows[i+1][qs]):
+            continue
+        
+        path1 = get_path_from_name(lookup_tree_leaf_name(index, row1[tname]), tree)
+        
+        for j in range(i+1, len(rows)):
             #print(i, j)
             if j in used:
                 continue
@@ -57,8 +50,7 @@ def find_overlap_and_div(rows, output_file, tree, blat_db, index):
             if s2 > e1:
                 break
 
-            overlap_size = overlaps(s1, e1, s2, e2)
-            if overlaps == None:
+            if overlaps(s1, e1, s2, e2) == None:
                 continue
 
             # if they are both equal and known

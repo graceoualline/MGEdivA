@@ -111,11 +111,12 @@ def find_overlap(rows, output_file, blat_db, gtdb_index):
     qe = 3 # qend is 3
     rsp = 10 #ref species is 7
     new_rows = set()
-    rows = sorted(rows, key=lambda x: (int(x[qs]), int(x[qe])))
+    rows = sorted(rows, key=lambda x: (int(x[qs])))
     used = set()
-    for i in range(len(rows)):
-        if rows[i] in used:
+    for i, row1 in enumerate(rows):
+        if i in used:
             continue
+
         s1, e1, species1, row1 = int(rows[i][qs]), int(rows[i][qe]), rows[i][rsp], rows[i]
         
         #if the next row just doesnt overlap at all with the current, no one will overlap with the current, discard
@@ -125,34 +126,39 @@ def find_overlap(rows, output_file, blat_db, gtdb_index):
         #find the row with the most overlap that does not share a species
         for j in range(i+1, len(rows)):
             #print("j", j)
-            if rows[j] in used:
+            if j in used:
                 continue
 
             s2, e2, species2, row2 = int(rows[j][qs]), int(rows[j][qe]), rows[j][rsp], rows[j]
-            if e1 < s2:
+            if s2 > e1:
                 break
             
+            if overlaps(s1, e1, s2, e2) == None: continue
+
+            if species1 == species2 and "unclassified" not in [species1, species2]:
+                continue
+
             new_start, new_end = max(s1, s2), min(e1, e2)
 
-            if overlaps(s1, e1, s2, e2):
-                if "unclassified" in [species1, species2]:
-                    id1 = row1[4]
-                    id2 = row2[4]
-                    ani = find_ani_overlap(id1, id2, blat_db, gtdb_index)
-                    if type(ani) != str and ani < 95:
-                        new_row = build_overlap_row(row1, row2, new_start, new_end, ani)
-                        new_rows.add(new_row)
-                        used.add(rows[i])
-                        used.add(rows[j])
-                        break
-                #if it overlaps and the species are not equal
-                elif species1 != species2 and "unclassified" not in [species1, species2]:
-                    #There was no ani between species considered since they had dif names
-                    new_row = build_overlap_row(row1, row2, new_start, new_end, "NA")
+            # if one of the species is unknown, then find their ani
+            if "unclassified" in [species1, species2]:
+                id1 = row1[4]
+                id2 = row2[4]
+                ani = find_ani_overlap(id1, id2, blat_db, gtdb_index)
+                if type(ani) != str and ani < 95:
+                    new_row = build_overlap_row(row1, row2, new_start, new_end, ani)
                     new_rows.add(new_row)
                     used.add(rows[i])
                     used.add(rows[j])
                     break
+            #if it overlaps and the species are not equal
+            elif species1 != species2:
+                #There was no ani between species considered since they had dif names
+                new_row = build_overlap_row(row1, row2, new_start, new_end, "NA")
+                new_rows.add(new_row)
+                used.add(rows[i])
+                used.add(rows[j])
+                break
 
     with open(output_file, "w") as out:
         out.write("Q name\tQ size\tQ start\tQ end\tT name\tT size\tT start\tT end\tPercent Identity\tQuery Species\tReference Species\tDivergence Time\tANI bt seqs(if div=unk)\tANI bt ref seqs(if species unk)\n")
