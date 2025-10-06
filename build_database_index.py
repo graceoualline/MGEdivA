@@ -1,11 +1,51 @@
 # this should intake the folder that contains a bunch of split of 2bit files
 # and it will return a .pkl file which is a hash table that essential works like
-# index[sequence_id] = (sequence_species, sequence_location_in_the_database)
+# index[sequence_id] = (sequence_species, sequence_location_in_the_database, path_in_tree)
 import os
 import subprocess
 import tempfile
 import pickle
+from ete3 import Tree
 from extract_species_from_kraken import *
+
+def get_path(sp, tree):
+    if sp == "unclassified":
+        return "NA"
+
+    sp = "_".join(sp.split(" "))
+    sp = "'" + sp + "'"
+
+    try:
+        path = tree & sp
+        return path
+    except:
+        first = sp.split("_")
+        try:
+            new = first[0] + "_" + first[1] + "'"
+            path = tree & new
+            return path
+        except:
+            try: 
+                new = first[0] + "'"
+                path = tree & new
+                return path
+            except:
+                #if all else fails, find the first instance of the name within another name
+                for node in tree.traverse("preorder"):
+                    if first[0] in node.name:
+                        return node
+                return "NA"
+
+# return the actual node name that is within the tree
+def get_path_identifier(node):
+    if node == "NA":
+        return "NA"
+    path_names = []
+    current = node
+    while current is not None:
+        path_names.append(current.name if current.name else "unnamed")
+        current = current.up
+    return path_names[0]
 
 #first step, get the locations of all sequence ids
 def get_seq_id_loc(two_bit_dir, input_files):
@@ -40,9 +80,10 @@ def get_seq_id_loc(two_bit_dir, input_files):
     print(f"Found {len(seq_id_loc)} total sequences")
     return seq_id_loc
 
-def combine_seq_spec_loc(species_file, seq_id_loc, two_bit_dir):
+def combine_seq_spec_loc(species_file, seq_id_loc, two_bit_dir, tree):
     # Step 1: Load species data into a dictionary
     seq_to_species = {}
+    all_species = set()
     if species_file and os.path.exists(species_file):
         print(f"Loading existing species data from {species_file}...")
         with open(species_file, "r") as f:
@@ -50,27 +91,45 @@ def combine_seq_spec_loc(species_file, seq_id_loc, two_bit_dir):
                 parts = line.strip().split("\t")
                 if len(parts) >= 2:
                     seq_id, species = parts[0], parts[1]
+                    all_species.add(species)
                     seq_to_species[seq_id] = species
         print(f"Loaded {len(seq_to_species)} existing species annotations")
     else:
         raise Exception("No species file provided or file doesn't exist")
-
-    #Step 2: Process each sequence
+    ##Debug
+    # seq_to_species_test = [('JAHAAN010000031.1', 'unclassified'), ('QHWJ01000176.1', 'Rhizobiaceae'), ('WQSI01000087.1', 'unclassified'), ('NZ_QJUG01000292.1', 'Nonomuraea gerenzanensis'), ('JAJXTT010000076.1', 'Paracoccus versutus'), ('JAADEE010000229.1', 'Acinetobacter baumannii')]
+    # all_species = [i for _, i in seq_to_species_test]
+    # print(seq_to_species_test)
+    # print(all_species)
+    #Step 2: Create a dictionary of all species, and where they are in the tree
+    print("Obtaining species path in the tree")
+    print(f"There are {len(all_species)} species")
+    species_leaf_name = dict()
+    for i, sp in enumerate(all_species):
+        if i % 50 == 0:
+            print(f"{i}/{len(all_species)} paths found.")
+        path = get_path(sp, tree)
+        leaf_name = get_path_identifier(path)
+        species_leaf_name[sp] = leaf_name
+    # print("Species leaf name dictionary", species_leaf_name)
+    print("Paths obtained. Creating hash table.")
+    #Step 3: Process each sequence
     result_dict = {}
-    
+    # print("seq_id_loc:", seq_id_loc)
     for i, seq_loc in enumerate(seq_id_loc, 1):
         #make sure there are two entries
         if len(seq_loc) >= 2:
             seq_id, file_location = seq_loc[0], seq_loc[1]
 
             # Progress indicator
-            if i % 10000 == 0 or i == len(seq_id_loc):
+            if i % 100 == 0 or i == len(seq_id_loc):
                 print(f"Progress: {i}/{len(seq_id_loc)} sequences processed")
 
             # if the sequence does not have a species, go find it with kraken
             species = seq_to_species.get(seq_id, "unclassified")
-            result_dict[seq_id] = (species, file_location)
-
+            #print("seq_id, seq_to_species[seq_id]", seq_id, species)
+            result_dict[seq_id] = (species, file_location, species_leaf_name[species])
+    # print("RESULT DIcT:", result_dict)
     return result_dict
 
 def load_hash_table(index_file):
@@ -98,16 +157,26 @@ def lookup_location(hash_table, seq_id):
     tuple = hash_table.get(seq_id, "unclassified")
     return tuple[1]
 
+def lookup_tree_leaf_name(hash_table, seq_id):
+    """
+    Looks up the species name for a given seq_id using the hash table.
+    Returns "unclassified" if not found.
+    """
+    tuple = hash_table.get(seq_id, "NA")
+    return tuple[2]
+
 if __name__ == "__main__":
-    if len(sys.argv) != 4:
-        print("Usage: python3 build_database_index.py <2bit_blat_db_dir> <output_file_name> <species_file>")
+    if len(sys.argv) != 5:
+        print("Usage: python3 build_database_index.py <2bit_blat_db_dir> <output_file_name> <species_file> <tree>")
         print("  2bit_blat_db_dir: Directory containing .2bit files")
         print("  output_file_name: Output .pkl file name")
         print("  species_file: Existing species annotation file")
+        print("  tree: Time Tree of Life .nwk file")
         sys.exit(1)
     two_bit_dir = sys.argv[1]
     final_output = sys.argv[2]
     species_file = sys.argv[3]
+    tree = Tree(sys.argv[4])
 
     if not os.path.exists(two_bit_dir):
         print(f"ERROR: 2bit directory {two_bit_dir} does not exist")
@@ -126,12 +195,13 @@ if __name__ == "__main__":
     print("STEP 1: Extracting sequence IDs from 2bit files")
     print("="*60)
     seq_id_loc = get_seq_id_loc(two_bit_dir, input_files)
+    #seq_id_loc = [('JAHAAN010000031.1', 'f1'), ('QHWJ01000176.1', 'f2'), ('WQSI01000087.1', 'f3'), ('NZ_QJUG01000292.1', 'f4'), ('JAJXTT010000076.1', 'f5'), ('JAADEE010000229.1', 'f6')]
     # next, we use a file that connects seq_id and species determined by kraken
     # and add that to the index # use to be combine_species_location.py
     print("\n" + "="*60) 
     print("STEP 2: Combining with species data and Kraken classification")
     print("="*60)
-    seq_species_loc = combine_seq_spec_loc(species_file, seq_id_loc, two_bit_dir)
+    seq_species_loc = combine_seq_spec_loc(species_file, seq_id_loc, two_bit_dir, tree)
 
     # # now make a loadable index from this new table of id, species, location
     print("\n" + "="*60)

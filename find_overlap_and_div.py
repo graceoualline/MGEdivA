@@ -20,13 +20,8 @@ from find_overlap import *
 #     return None
 
 #if it finds regions that overlap and map to the same species, it will combine them
-def get_div_alt(path1, path2, tree):
-    if path1 == "NA" or path2 == "NA":
-        return "unk:unable_to_find_ref_species_in_tree"
-    distance = path1.get_distance(path2)
-    return distance
 
-def find_overlap_and_div(rows, output_file, tree, blat_db, kraken):
+def find_overlap_and_div(rows, output_file, tree, blat_db, index):
     #"Q name\tQ size\tQ start\tQ end\tT name\tT size\tT start\tT end\tPercent Identity\tQuery Species\tReference Species\tDivergence Time\tANI bt seqs(if div=unk)\tANI bt ref seqs(if species unk)\n")
     qs = 2 #q start is 2
     qe = 3 # qend is 3
@@ -35,18 +30,10 @@ def find_overlap_and_div(rows, output_file, tree, blat_db, kraken):
     new_rows = set()
     rows = sorted(list(rows), key=lambda x:int(x[qs]))
     used = set()
-    species_path_cache = {"unclassified": "NA"}
+    
     species_set = set(row[rsp] for row in rows)
 
-    #print(f"Pre-caching {len(species_set)} species paths...")
     i = 0
-    for species in species_set:
-        #print(i)
-        i += 1
-        if species not in species_path_cache:
-            species_path_cache[species] = get_path(species, tree)
-
-    #print(f"Processing {len(rows)} rows")
 
     start_positions = [int(row[1][qs]) for row in rows]
 
@@ -55,7 +42,7 @@ def find_overlap_and_div(rows, output_file, tree, blat_db, kraken):
             continue
 
         s1, e1, species1 = int(rows[i][qs]), int(rows[i][qe]), rows[i][rsp]
-        path1 = species_path_cache[species1]
+        path1 = get_path_from_name(lookup_tree_leaf_name(index, row1[tname]), tree)
         # Cache species path
         # Use binary search to find potential overlapping rows
         # Only check rows that start before or at e1
@@ -78,8 +65,8 @@ def find_overlap_and_div(rows, output_file, tree, blat_db, kraken):
             if species1 == species2 and "unclassified" not in [species1, species2]:
                 continue
 
-            path2 = species_path_cache[species2]
-            div = get_div_alt(path1, path2, tree)
+            path2 = get_path_from_name(lookup_tree_leaf_name(index, row2[tname]), tree)
+            div = get_div(path1, path2, tree)
             ani = "NA"
 
             # if div is not a number, then it is unknown
@@ -87,7 +74,7 @@ def find_overlap_and_div(rows, output_file, tree, blat_db, kraken):
                 #get the ani instead
                 id1 = row1[tname]
                 id2 = row2[tname]
-                ani = find_ani_overlap(id1, id2, blat_db, kraken)
+                ani = find_ani_overlap(id1, id2, blat_db, index)
 
                 
             if (not isinstance(div, str) and div >= 1) or (isinstance(ani, int) and ani < 95):
@@ -127,10 +114,10 @@ if __name__ == "__main__":
     output = sys.argv[2]
     tree = Tree(sys.argv[3])
     blat_db = sys.argv[4]
-    kraken = load_hash_table(sys.argv[5])
+    index = load_hash_table(sys.argv[5])
 
     #print("Compressing")
     rows = compress(input_file)
     #print("Rows before:", len(rows))
-    find_overlap_and_div(rows, output, tree, blat_db, kraken)
+    find_overlap_and_div(rows, output, tree, blat_db, index)
     print("Filtered file written to", output)

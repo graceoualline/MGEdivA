@@ -17,58 +17,23 @@ from Bio import SeqIO
 # Global length cache
 _sequence_length_cache = {}
 
-def get_path(sp, tree):
-    if sp == "unclassified":
+def get_path_from_name(leaf_name, tree):
+    if leaf_name == "NA": return "NA"
+    try: return tree & leaf_name
+    except: 
+        print("Unable to find path of", leaf_name)
         return "NA"
-
-    sp = "_".join(sp.split(" "))
-    sp = "'" + sp + "'"
-
-    try:
-        path = tree & sp
-        return path
-    except:
-        first = sp.split("_")
-        try:
-            new = first[0] + "_" + first[1] + "'"
-            path = tree & new
-            return path
-        except:
-            try: 
-                new = first[0] + "'"
-                path = tree & new
-                return path
-            except:
-                #if all else fails, find the first instance of the name within another name
-                for node in tree.traverse("preorder"):
-                    if first[0] in node.name:
-                        return node
-                return "NA"
 
 #this is taken from PAReTT and altered
 def get_div(path1, path2, tree):
     if path1 == "NA" or path2 == "NA":
         return "unk:unable_to_find_ref_species_in_tree"
-
     try:
         distance = path1.get_distance(path2)
         return distance
     except:
-        return "unk:unable_to_find_ref_species_in_tree"
-
-def process_kraken(hash_table, seq_id):
-    """
-    Uses binary search to find the species of a given sequence ID from the Kraken output.
-    Returns the species name, or None if not found.
-    """
-    # Use binary search to find the sequence ID in the Kraken file
-    #print("seq_id", seq_id)
-    try:
-        species = lookup_species(hash_table, seq_id)
-        return species if species else "unclassified"
-    except Exception as e:
-        print(f"Error when finding {seq_id}: {e}")
-        return "unclassified"
+        print("Unable to find the path betweens", path1, path2)
+        return "unk:unable_connect_two_paths_in_tree"
 
 def count_basepairs(fasta_path):
     if fasta_path in _sequence_length_cache:
@@ -122,9 +87,9 @@ def calculate_distance(seq1, seq2):
         print(f"Error running skani: {e}")
         return "unk:skani_err"  # Return 0 in case of errors
 
-def extract_2bit_fasta(ref_id, kraken, blat_db):
+def extract_2bit_fasta(ref_id, index, blat_db):
     # Step 1: Identify which .2bit file contains the reference sequence
-    ref_2bit_file = lookup_location(kraken, ref_id)
+    ref_2bit_file = lookup_location(index, ref_id)
     if not ref_2bit_file:
         print(f"Error: Reference ID {ref_id} not found in {blat_db}")
         return None
@@ -137,7 +102,7 @@ def extract_2bit_fasta(ref_id, kraken, blat_db):
         subprocess.run(["twoBitToFa", ref_2bit_file, "-seq=" + ref_id, ref_fasta_name], check=True)
     return ref_fasta_name
 
-def find_ani(q_seq, ref_id, blat_db, kraken):
+def find_ani(q_seq, ref_id, blat_db, index):
     """
     Finds the ANI between a query sequence and a reference sequence stored in a .2bit file.
 
@@ -149,14 +114,14 @@ def find_ani(q_seq, ref_id, blat_db, kraken):
     Returns:
     - float: ANI value (or None if reference is not found).
     """
-    ref_fasta_name = extract_2bit_fasta(ref_id, kraken, blat_db)
+    ref_fasta_name = extract_2bit_fasta(ref_id, index, blat_db)
 
     distance = calculate_distance(q_seq, ref_fasta_name)
     
     os.remove(ref_fasta_name)
     return distance
 
-def filter_blat(inf, outf, q_species, kraken, tree, q_seq, blat_db, minIdentity):
+def filter_blat(inf, outf, q_species, index, tree, q_seq, blat_db, minIdentity):
     #get a df or array that converts all of the columns fomr input file .psl into something readable
     if q_species != "unclassified": path1 = get_path(q_species, tree)
     #write header of input file to putput file
@@ -165,11 +130,9 @@ def filter_blat(inf, outf, q_species, kraken, tree, q_seq, blat_db, minIdentity)
         #we only care about query, sequence
         #outfile.write("match\tmismatch\trep. match\tN's\tQ gap count \t Q gap bases\tT gap count \tT gap bases\tstrand\tQ name\tQ size\tQ start\t Q end\tT name\tT size\tT start\tT end\tblock count\tblockSizes\tqStarts\ttStarts\tQuery_Species\tReference_Species\tDivergence_Time\n")
         outfile.write("match\tmismatch\trep. match\tN's\tQ gap count \tQ gap bases\tT gap count\tT gap bases\tstrand\tQ name\tQ size\tQ start\t Q end\tT name\tT size\tT start\tT end\tblock count\tblockSizes\tqStarts\ttStarts\tPercent Identity\tQuery Species\tReference Species\tDivergence Time\tANI bt seqs(if div=unk)\n")
-        species_path_cache = {}
         # Process each line in the BLAT file
         for line in infile:
             columns = line.strip().split('\t')
-            #print("columns", columns)
             #skip the header lines
             if len(columns) != 21 or columns[0] == 'match':
                 continue
@@ -184,20 +147,20 @@ def filter_blat(inf, outf, q_species, kraken, tree, q_seq, blat_db, minIdentity)
             if perIdent < minIdentity:
                 continue
             # Get the species of the reference sequence using Kraken and grep
-            ref_species = process_kraken(kraken, ref_id)
+            ref_species = lookup_species(index, ref_id)
     
             if ref_species is None:
                 print("ERROR, your index mapping database genomes to their species and locations was not made correctly.")
-                print(f"Unable to find the species for {ref_id} in {kraken}. Skipping.")
+                print(f"Unable to find the species for {ref_id} in {index}. Skipping.")
                 continue  # Skip this line if no species found for reference sequence
             if q_species == "unclassified" or ref_species == "unclassified" or path1 == None:
                 div = "unk:unclassified_species"
             else:
-                if ref_species not in species_path_cache:
-                    species_path_cache[ref_species] = get_path(ref_species, tree)
-            # Get the divergence time between query species and reference species
-                div = get_div(path1, species_path_cache[ref_species], tree)
-            #print("div", div, q_species, ref_species)
+                path2 = get_path_from_name(lookup_tree_leaf_name(index, ref_id), tree)
+                # Get the divergence time between query species and reference species
+                div = get_div(path1, path2, tree)
+                if path1 != "NA" and path2 != "NA":
+                    new_div = path1.get_distance(path2)
             if div == None:
                 div = "unk:unable_to_find_ref_species_in_tree"
 
@@ -205,8 +168,7 @@ def filter_blat(inf, outf, q_species, kraken, tree, q_seq, blat_db, minIdentity)
             if isinstance(div, (int, float)) and div < 1:
                 continue  # Skip lines with less than 1 MYA
             elif isinstance(div, str): #if div is unk, then find ani
-                ani = find_ani(q_seq, ref_id, blat_db, kraken) 
-                #print("ani calculated:", ani)
+                ani = find_ani(q_seq, ref_id, blat_db, index) 
                 if isinstance(ani, (int, float)):
                     if ani < 0 or ani >= 95:
                         continue #skip lines with 95 or more ani since that means they are same species
@@ -225,10 +187,10 @@ if __name__ == "__main__":
     input_file = sys.argv[1]
     output_file = sys.argv[2]
     q_species = sys.argv[3]
-    kraken = sys.argv[4]
+    index = sys.argv[4]
     tree = Tree(sys.argv[5])
     q_seq = sys.argv[6]
     blat_db = sys.argv[7]
-    kraken = load_hash_table(kraken)
+    index = load_hash_table(index)
     minIdentity = sys.argv[8]
-    filter_blat(input_file, output_file, q_species, kraken, tree, q_seq, blat_db, minIdentity)
+    filter_blat(input_file, output_file, q_species, index, tree, q_seq, blat_db, minIdentity)
