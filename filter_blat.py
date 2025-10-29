@@ -21,8 +21,12 @@ def get_path_from_name(leaf_name, tree):
     if leaf_name == "NA": return "NA"
     try: return tree & leaf_name
     except: 
-        print("Unable to find path of", leaf_name)
-        return "NA"
+        try: 
+            path = get_path(leaf_name, tree)
+            return path
+        except:
+            print("Unable to find path of", leaf_name)
+            return "NA"
 
 #this is taken from PAReTT and altered
 def get_div(path1, path2, tree):
@@ -121,9 +125,20 @@ def find_ani(q_seq, ref_id, blat_db, index):
     os.remove(ref_fasta_name)
     return distance
 
+def check_div_cache(sp1, sp2, cache):
+    if (sp1, sp2) in cache: return cache[(sp1, sp2)]
+    elif (sp2, sp1) in cache: return cache[(sp2, sp1)]
+    return None
+
+
 def filter_blat(inf, outf, q_species, index, tree, q_seq, blat_db, minIdentity):
+    div_cache = dict() # will be (species1, species2): divergence time
+    path_cache = dict() # will be species: path
+    ani_cache = dict() # will be ref_id: ani
     #get a df or array that converts all of the columns fomr input file .psl into something readable
     if q_species != "unclassified": path1 = get_path(q_species, tree)
+    else: path1 = None
+    path_cache[q_species] = path1
     #write header of input file to putput file
     with open(inf, 'r') as infile, open(outf, 'w') as outfile:
         # Write a new header to file that is tabulated and has our new guys on the end
@@ -156,11 +171,16 @@ def filter_blat(inf, outf, q_species, index, tree, q_seq, blat_db, minIdentity):
             if q_species == "unclassified" or ref_species == "unclassified" or path1 == None:
                 div = "unk:unclassified_species"
             else:
-                path2 = get_path_from_name(lookup_tree_leaf_name(index, ref_id), tree)
-                # Get the divergence time between query species and reference species
-                div = get_div(path1, path2, tree)
-                if path1 != "NA" and path2 != "NA":
-                    new_div = path1.get_distance(path2)
+                div = check_div_cache(q_species, ref_species, div_cache)
+                if div == None:
+                    ref_leaf_name = lookup_tree_leaf_name(index, ref_id)
+                    if ref_leaf_name in path_cache: path2 = path_cache[ref_leaf_name]
+                    else: 
+                        path2 = get_path_from_name(ref_leaf_name, tree)
+                        path_cache[ref_leaf_name] = path2
+                    # Get the divergence time between query species and reference species
+                    div = get_div(path1, path2, tree)
+                    div_cache[(q_species, ref_species)] = div
             if div == None:
                 div = "unk:unable_to_find_ref_species_in_tree"
 
@@ -168,7 +188,10 @@ def filter_blat(inf, outf, q_species, index, tree, q_seq, blat_db, minIdentity):
             if isinstance(div, (int, float)) and div < 1:
                 continue  # Skip lines with less than 1 MYA
             elif isinstance(div, str): #if div is unk, then find ani
-                ani = find_ani(q_seq, ref_id, blat_db, index) 
+                if ref_id in ani_cache: ani = ani_cache[ref_id]
+                else: 
+                    ani = find_ani(q_seq, ref_id, blat_db, index) 
+                    ani_cache[ref_id] = ani
                 if isinstance(ani, (int, float)):
                     if ani < 0 or ani >= 95:
                         continue #skip lines with 95 or more ani since that means they are same species
@@ -176,7 +199,7 @@ def filter_blat(inf, outf, q_species, index, tree, q_seq, blat_db, minIdentity):
         
             # Write the line with the added divergence time, query species, and reference species
             new_line = "\t".join(columns)
-            outfile.write(new_line.strip() + f"\t{perIdent}\t{q_species}\t{ref_species}\t{div}\t{ani}\n")
+            outfile.write(new_line.strip() + f"\t{perIdent}\t{q_species}\t{lookup_tree_leaf_name(index, ref_id)}\t{div}\t{ani}\n")
 
 if __name__ == "__main__":
     # Check if the correct number of command-line arguments is provided

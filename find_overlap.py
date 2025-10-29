@@ -113,6 +113,7 @@ def find_overlap(rows, output_file, blat_db, gtdb_index):
     new_rows = set()
     rows = sorted(rows, key=lambda x: (int(x[qs])))
     used = set()
+    ani_cache = dict()
     for i, row1 in enumerate(rows):
         if i in used:
             continue
@@ -144,7 +145,11 @@ def find_overlap(rows, output_file, blat_db, gtdb_index):
             if "unclassified" in [species1, species2]:
                 id1 = row1[4]
                 id2 = row2[4]
-                ani = find_ani_overlap(id1, id2, blat_db, gtdb_index)
+                if (id1, id2) in ani_cache: ani = ani_cache[(id1, id2)]
+                elif (id2, id1) in ani_cache: ani = ani_cache[(id2, id1)]
+                else: 
+                    ani = find_ani_overlap(id1, id2, blat_db, gtdb_index)
+                    ani_cache[(id1, id2)] = ani
                 if type(ani) != str and ani < 95:
                     new_row = build_overlap_row(row1, row2, new_start, new_end, ani)
                     new_rows.add(new_row)

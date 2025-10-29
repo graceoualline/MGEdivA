@@ -17,6 +17,9 @@ from find_overlap import *
 #if it finds regions that overlap and map to the same species, it will combine them
 
 def find_overlap_and_div(rows, output_file, tree, blat_db, index):
+    div_cache = dict()
+    path_cache=dict()
+    ani_cache = dict() # (id1, id2) : ani
     #"Q name\tQ size\tQ start\tQ end\tT name\tT size\tT start\tT end\tPercent Identity\tQuery Species\tReference Species\tDivergence Time\tANI bt seqs(if div=unk)\tANI bt ref seqs(if species unk)\n")
     qs = 2 #q start is 2
     qe = 3 # qend is 3
@@ -38,8 +41,8 @@ def find_overlap_and_div(rows, output_file, tree, blat_db, index):
         
         if i + 1 < len(rows) and  e1 < int(rows[i+1][qs]):
             continue
-        
-        path1 = get_path_from_name(lookup_tree_leaf_name(index, row1[tname]), tree)
+        if species1 in path_cache: path1 = path_cache[species1]
+        else: path1 = get_path_from_name(species1, tree)
         
         for j in range(i+1, len(rows)):
             #print(i, j)
@@ -56,9 +59,14 @@ def find_overlap_and_div(rows, output_file, tree, blat_db, index):
             # if they are both equal and known
             if species1 == species2 and "unclassified" not in [species1, species2]:
                 continue
-
-            path2 = get_path_from_name(lookup_tree_leaf_name(index, row2[tname]), tree)
-            div = get_div(path1, path2, tree)
+            div = check_div_cache(species1, species2, div_cache)
+            if div == None:
+                if species2 in path_cache: path2 = path_cache[species2]
+                else: path2 = get_path_from_name(species2, tree)
+                # Get the divergence time between query species and reference species
+                div = get_div(path1, path2, tree)
+                div_cache[(species1, species2)] = div
+            
             ani = "NA"
 
             # if div is not a number, then it is unknown
@@ -66,7 +74,11 @@ def find_overlap_and_div(rows, output_file, tree, blat_db, index):
                 #get the ani instead
                 id1 = row1[tname]
                 id2 = row2[tname]
-                ani = find_ani_overlap(id1, id2, blat_db, index)
+                if (id1, id2) in ani_cache: ani = ani_cache[(id1, id2)]
+                elif (id2, id1) in ani_cache: ani = ani_cache[(id2, id1)]
+                else: 
+                    ani = find_ani_overlap(id1, id2, blat_db, index)
+                    ani_cache[(id1, id2)] = ani
 
                 
             if (not isinstance(div, str) and div >= 1) or (isinstance(ani, int) and ani < 95):
