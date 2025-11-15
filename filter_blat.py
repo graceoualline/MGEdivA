@@ -34,7 +34,7 @@ def get_div(path1, path2, tree):
         return "unk:unable_to_find_ref_species_in_tree"
     try:
         distance = path1.get_distance(path2)
-        return distance
+        return distance / 2
     except:
         print("Unable to find the path betweens", path1, path2)
         return "unk:unable_connect_two_paths_in_tree"

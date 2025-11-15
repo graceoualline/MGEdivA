@@ -18,7 +18,7 @@ from find_overlap import *
 
 def find_overlap_and_div(rows, output_file, tree, blat_db, index):
     div_cache = dict()
-    path_cache=dict()
+    path_cache = dict()
     ani_cache = dict() # (id1, id2) : ani
     #"Q name\tQ size\tQ start\tQ end\tT name\tT size\tT start\tT end\tPercent Identity\tQuery Species\tReference Species\tDivergence Time\tANI bt seqs(if div=unk)\tANI bt ref seqs(if species unk)\n")
     qs = 2 #q start is 2
