@@ -1,51 +1,104 @@
 # this should intake the folder that contains a bunch of split of 2bit files
 # and it will return a .pkl file which is a hash table that essential works like
-# index[sequence_id] = (sequence_species, sequence_location_in_the_database, path_in_tree)
+# index[sequence_id] = (sequence_species, sequence_location_in_the_database, name_in_tree)
+from ete3 import Tree
 import os
 import subprocess
 import tempfile
 import pickle
-from ete3 import Tree
 from extract_species_from_kraken import *
+import pandas as pd
+import numpy as np
 
-def get_path(sp, tree):
-    if sp == "unclassified":
-        return "NA"
+def get_one(path_iter):
+    paths = list(path_iter)
+    if len(paths) != 1:
+        raise ValueError(f"Expected 1 file, found {len(paths)}: {paths}. You do not have the proper files needed for the divergence tree.")
+    return str(paths[0])
 
-    sp = "_".join(sp.split(" "))
-    sp = "'" + sp + "'"
+def load_H5(file):
+    store = pd.HDFStore(file)
+    df = store["table"]
+    return df
 
-    try:
-        path = tree & sp
-        return path
-    except:
-        first = sp.split("_")
+class Divergence_Tree_Preprocessed():
+    """
+    Class for finding divergence along a tree that has been preprocessed
+    """
+    def __init__(self, tree_dir):
+        tree_path = Path(tree_dir)
+        nwk_file   = get_one(tree_path.glob("*.nwk"))
+        plk_file   = get_one(tree_path.glob("*.pkl"))
+        index_file = get_one(tree_path.glob("*.index.h5"))
+        mins_file  = get_one(tree_path.glob("*.mins.h5"))
+        tour_file  = get_one(tree_path.glob("*.tour.h5"))
+
+        print("Loading Divergence Tree")
+        self.tree = Tree(nwk_file)
+        self.species_dist = load_hash_table(plk_file)
+        self.index = load_H5(index_file)
+        self.mins = load_H5(mins_file)
+        self.tour = load_H5(tour_file)[0].tolist()
+        print("Divergence Tree Loaded!")
+        
+    def get_min_index(self, i,j):
+        """Range min query on L[i:j]"""
+        m = int(np.log2(j-i))
+        minimum = min(self.mins.iat[m, i], self.mins.iat[m, j-2**m])
+        min_index = self.index.iat[m, i] if self.mins.iat[m, i] == minimum else self.index.iat[m, j-2**m]
+        return min_index
+
+    def divergence(self, a, b):
+        """Finds divergence between nodes a and b"""
+        if a == "NA" or b == "NA":
+            return "unk:unable_to_find_ref_species_in_tree"
+        a_tour_step = self.species_dist[a][1]
+        b_tour_step = self.species_dist[b][1]
+        a_dist = self.species_dist[a][0]
+        b_dist = self.species_dist[b][0]
+        lca_step = self.get_min_index(min(a_tour_step, b_tour_step), max(a_tour_step, b_tour_step)+1)
+        lca = self.tour[lca_step]
+        lca_dist = self.species_dist[lca][0]
+        return (a_dist + b_dist - 2*lca_dist)/2
+
+    def get_path(self, sp):
+        if sp == "unclassified":
+            return "NA"
+
+        sp = "_".join(sp.split(" "))
+        sp = "'" + sp + "'"
+
         try:
-            new = first[0] + "_" + first[1] + "'"
-            path = tree & new
+            path = self.tree & sp
             return path
         except:
-            try: 
-                new = first[0] + "'"
-                path = tree & new
+            first = sp.split("_")
+            try:
+                new = first[0] + "_" + first[1] + "'"
+                path = self.tree & new
                 return path
             except:
-                #if all else fails, find the first instance of the name within another name
-                for node in tree.traverse("preorder"):
-                    if first[0] in node.name:
-                        return node
-                return "NA"
+                try: 
+                    new = first[0] + "'"
+                    path = self.tree & new
+                    return path
+                except:
+                    #if all else fails, find the first instance of the name within another name
+                    for node in self.tree.traverse("preorder"):
+                        if first[0] in node.name:
+                            return node
+                    return "NA"
 
-# return the actual node name that is within the tree
-def get_path_identifier(node):
-    if node == "NA":
-        return "NA"
-    path_names = []
-    current = node
-    while current is not None:
-        path_names.append(current.name if current.name else "unnamed")
-        current = current.up
-    return path_names[0]
+    # return the actual node name that is within the tree
+    def get_path_identifier(self, node):
+        if node == "NA":
+            return "NA"
+        path_names = []
+        current = node
+        while current is not None:
+            path_names.append(current.name if current.name else "unnamed")
+            current = current.up
+        return path_names[0]
 
 #first step, get the locations of all sequence ids
 def get_seq_id_loc(two_bit_dir, input_files):
@@ -108,8 +161,8 @@ def combine_seq_spec_loc(species_file, seq_id_loc, two_bit_dir, tree):
     for i, sp in enumerate(all_species):
         if i % 50 == 0:
             print(f"{i}/{len(all_species)} paths found.")
-        path = get_path(sp, tree)
-        leaf_name = get_path_identifier(path)
+        path = tree.get_path(sp)
+        leaf_name = tree.get_path_identifier(path)
         species_leaf_name[sp] = leaf_name
     # print("Species leaf name dictionary", species_leaf_name)
     print("Paths obtained. Creating hash table.")
@@ -176,7 +229,7 @@ if __name__ == "__main__":
     two_bit_dir = sys.argv[1]
     final_output = sys.argv[2]
     species_file = sys.argv[3]
-    tree = Tree(sys.argv[4])
+    tree = Divergence_Tree_Preprocessed(sys.argv[4])
 
     if not os.path.exists(two_bit_dir):
         print(f"ERROR: 2bit directory {two_bit_dir} does not exist")

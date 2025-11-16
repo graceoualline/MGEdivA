@@ -19,6 +19,7 @@ from find_overlap import *
 from combine_mgediva_output import *
 from find_overlap_and_div import *
 from parse_args import *
+from build_database_index import *
 
 def combine_and_cleanup_psl_files(args):
     header_lines = 5
@@ -343,7 +344,7 @@ def main():
         index=merged_config['index'],
         max_threads=merged_config['threads'],
         kraken_db=merged_config['kraken'],
-        tree=Tree(merged_config['tree']),
+        tree=Divergence_Tree_Preprocessed(merged_config['tree']),
         remove=merged_config['remove'],
         species=merged_config['species'],
         minScore=merged_config['minScore'],

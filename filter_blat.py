@@ -22,22 +22,22 @@ def get_path_from_name(leaf_name, tree):
     try: return tree & leaf_name
     except: 
         try: 
-            path = get_path(leaf_name, tree)
+            path = tree.get_path(leaf_name)
             return path
         except:
             print("Unable to find path of", leaf_name)
             return "NA"
 
 #this is taken from PAReTT and altered
-def get_div(path1, path2, tree):
-    if path1 == "NA" or path2 == "NA":
-        return "unk:unable_to_find_ref_species_in_tree"
-    try:
-        distance = path1.get_distance(path2)
-        return distance / 2
-    except:
-        print("Unable to find the path betweens", path1, path2)
-        return "unk:unable_connect_two_paths_in_tree"
+# def get_div(path1, path2, tree):
+#     if path1 == "NA" or path2 == "NA":
+#         return "unk:unable_to_find_ref_species_in_tree"
+#     try:
+#         distance = path1.get_distance(path2)
+#         return distance / 2
+#     except:
+#         print("Unable to find the path betweens", path1, path2)
+#         return "unk:unable_connect_two_paths_in_tree"
 
 def count_basepairs(fasta_path):
     if fasta_path in _sequence_length_cache:
@@ -133,12 +133,14 @@ def check_div_cache(sp1, sp2, cache):
 
 def filter_blat(inf, outf, q_species, index, tree, q_seq, blat_db, minIdentity):
     div_cache = dict() # will be (species1, species2): divergence time
-    path_cache = dict() # will be species: path
+    #path_cache = dict() # will be species: name of it in the tree
     ani_cache = dict() # will be ref_id: ani
     #get a df or array that converts all of the columns fomr input file .psl into something readable
-    if q_species != "unclassified": path1 = get_path(q_species, tree)
-    else: path1 = None
-    path_cache[q_species] = path1
+
+    # get the name of the q species that is in the tree
+    if q_species != "unclassified": q_species = tree.get_path_identifier(tree.get_path(q_species))
+    #else: path1 = None
+    #path_cache[q_species] = path1
     #write header of input file to putput file
     with open(inf, 'r') as infile, open(outf, 'w') as outfile:
         # Write a new header to file that is tabulated and has our new guys on the end
@@ -168,18 +170,14 @@ def filter_blat(inf, outf, q_species, index, tree, q_seq, blat_db, minIdentity):
                 print("ERROR, your index mapping database genomes to their species and locations was not made correctly.")
                 print(f"Unable to find the species for {ref_id} in {index}. Skipping.")
                 continue  # Skip this line if no species found for reference sequence
-            if q_species == "unclassified" or ref_species == "unclassified" or path1 == None:
+            if q_species == "unclassified" or ref_species == "unclassified": # or path1 == None:
                 div = "unk:unclassified_species"
             else:
                 div = check_div_cache(q_species, ref_species, div_cache)
                 if div == None:
                     ref_leaf_name = lookup_tree_leaf_name(index, ref_id)
-                    if ref_leaf_name in path_cache: path2 = path_cache[ref_leaf_name]
-                    else: 
-                        path2 = get_path_from_name(ref_leaf_name, tree)
-                        path_cache[ref_leaf_name] = path2
                     # Get the divergence time between query species and reference species
-                    div = get_div(path1, path2, tree)
+                    div = tree.divergence(q_species, ref_leaf_name)
                     div_cache[(q_species, ref_species)] = div
             if div == None:
                 div = "unk:unable_to_find_ref_species_in_tree"
@@ -211,7 +209,7 @@ if __name__ == "__main__":
     output_file = sys.argv[2]
     q_species = sys.argv[3]
     index = sys.argv[4]
-    tree = Tree(sys.argv[5])
+    tree = Divergence_Tree_Preprocessed(sys.argv[5])
     q_seq = sys.argv[6]
     blat_db = sys.argv[7]
     index = load_hash_table(index)

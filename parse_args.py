@@ -12,7 +12,7 @@ class Config:
     index: str #index that maps sequences in the database to their species and locations
     max_threads: int # number of threads the user wants to use
     kraken_db: Path # path to the kraken database
-    tree: str # the time tree of life tree
+    tree: str # the folder that contains the tree and its preprocessing files
     remove: bool # is false when I am debugging and dont want files to be deleted
     species: str # user defined species of all of the sequences given in a query
     minScore: int # Is the minimum alignment score threshold, sets blat's parameter -minScore, default 30
@@ -46,7 +46,7 @@ def parse_args():
     parser.add_argument(
         "-d", "--database", help="Path to the blat database to use")
     parser.add_argument(
-        "-tr", "--tree", help="The Time Tree of Life tree (TimeTree_v5_Final.nwk)")
+        "-tr", "--tree", help="Directory path containing The Time Tree of Life tree (TimeTree_v5_Final.nwk), and its preprocessed files")
     parser.add_argument(
         "-i", "--index", help="Index of sequences in your blat db and their species and locations")
     parser.add_argument(

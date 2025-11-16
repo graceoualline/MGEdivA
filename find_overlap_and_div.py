@@ -8,8 +8,8 @@
 import csv
 import sys
 from filter_blat import *
-from ete3 import Tree
 import os
+from build_database_index import *
 from find_overlap import *
 
 #will keep Q name, Q start, Q end, T name(s), Q spec, T specie(s), divergence time(s), ani
@@ -18,7 +18,6 @@ from find_overlap import *
 
 def find_overlap_and_div(rows, output_file, tree, blat_db, index):
     div_cache = dict()
-    path_cache = dict()
     ani_cache = dict() # (id1, id2) : ani
     #"Q name\tQ size\tQ start\tQ end\tT name\tT size\tT start\tT end\tPercent Identity\tQuery Species\tReference Species\tDivergence Time\tANI bt seqs(if div=unk)\tANI bt ref seqs(if species unk)\n")
     qs = 2 #q start is 2
@@ -41,8 +40,6 @@ def find_overlap_and_div(rows, output_file, tree, blat_db, index):
         
         if i + 1 < len(rows) and  e1 < int(rows[i+1][qs]):
             continue
-        if species1 in path_cache: path1 = path_cache[species1]
-        else: path1 = get_path_from_name(species1, tree)
         
         for j in range(i+1, len(rows)):
             #print(i, j)
@@ -61,10 +58,8 @@ def find_overlap_and_div(rows, output_file, tree, blat_db, index):
                 continue
             div = check_div_cache(species1, species2, div_cache)
             if div == None:
-                if species2 in path_cache: path2 = path_cache[species2]
-                else: path2 = get_path_from_name(species2, tree)
                 # Get the divergence time between query species and reference species
-                div = get_div(path1, path2, tree)
+                div = tree.divergence(species1, species2)
                 div_cache[(species1, species2)] = div
             
             ani = "NA"
@@ -116,7 +111,7 @@ if __name__ == "__main__":
         sys.exit(1)
     input_file = sys.argv[1]
     output = sys.argv[2]
-    tree = Tree(sys.argv[3])
+    tree = Divergence_Tree_Preprocessed(sys.argv[3])
     blat_db = sys.argv[4]
     index = load_hash_table(sys.argv[5])
 
