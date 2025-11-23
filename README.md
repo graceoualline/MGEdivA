@@ -269,11 +269,11 @@ We provide a ready-to-use BLAT-compatible database created from the Genome Taxon
 #### Step 1: Build the Blat database
 The database must be in 2bit format with a maximum of ~2 billion base pairs per file. We recommend a size of 2 billion base pairs.
 ```
-python3 make_blat_db.py [fasta_file] [output_name] [size_in_bil_bp]
+python3 make_mgediva_db.py [fasta_file] [output_name] [size_in_bil_bp]
 ```
 For example:
 ```
-python3 make_blat_db.py gtdb.fa blat_gtdb_db 2
+python3 make_mgediva_db.py gtdb.fa mgediva_gtdb_db 2
 ```
 This script will:
 - Split the multifasta file into chunks of specified size

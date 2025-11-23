@@ -5,8 +5,10 @@ import sys
 import os
 import subprocess
 import time
-
-def write_group(group_seqs, index):
+from pathlib import Path
+import shutil
+import pathlib
+def write_group(group_seqs, index, output_dir):
         # if somehow the list is empty, skip
         if not group_seqs:
             return
@@ -64,16 +66,10 @@ def check_step1_completion(input_fasta, output_dir, original_count):
     
     return is_complete
 
-def split_fasta_by_bp(input_fasta, output_dir, max_bp):
-    #make dir if it doesnt exist
-    if not os.path.exists(output_dir):
-        os.makedirs(output_dir)
-
+def split_fasta_by_bp(input_fasta, blat_fasta_db, max_bp, total_seqs):
+    output_dir = str(blat_fasta_db)
+    seq_lengths = dict()
     # Count total sequences for progress tracking
-    total_seqs = count_sequences(input_fasta)
-
-    complete = check_step1_completion(input_fasta, output_dir, total_seqs)
-    if complete: return 1
 
     group = []
     group_bp = 0
@@ -84,23 +80,28 @@ def split_fasta_by_bp(input_fasta, output_dir, max_bp):
     print("\n" + "="*60)
     print("STEP 1: Splitting FASTA file by base pairs")
     print("="*60)
+    complete = check_step1_completion(input_fasta, output_dir, total_seqs)
+    if complete: 
+        print(f"Skipping splitting fastas, step already completed.")
+        return None
 
     for record in SeqIO.parse(input_fasta, "fasta"):
         seq_len = len(record.seq)
 
         processed_seqs += 1
         progress(processed_seqs, total_seqs, start_time, file_index)
+        seq_lengths[record.id] = seq_len
         
         # If one sequence is longer than max_bp, write it by itself
         if seq_len > max_bp:
             print(f"Warning: {record.id} is {seq_len} bp, longer than max ({max_bp} bp). Saving in its own file.")
-            write_group([record], file_index)
+            write_group([record], file_index, output_dir)
             file_index += 1
             continue
 
         # If adding this record would exceed max_bp, flush and start new group
         if group_bp + seq_len > max_bp:
-            write_group(group, file_index)
+            write_group(group, file_index, output_dir)
             file_index += 1
             group = [record]
             group_bp = seq_len
@@ -110,22 +111,99 @@ def split_fasta_by_bp(input_fasta, output_dir, max_bp):
 
     # Write the final group
     if group:
-        write_group(group, file_index)
+        write_group(group, file_index, output_dir)
 
     total_time = time.time() - start_time
     print(f"\nStep 1 completed in {total_time:.1f}s")
     print(f"Created {file_index} FASTA files")
+    return seq_lengths
 
-def convert_2bit(output_name):
-    input_directory = output_name + "_fa"
-    output_directory = output_name + "_2bit"
-    if not os.path.exists(output_directory):
-            os.makedirs(output_directory)
+def make_skani_db(split_fasta_dir, skani_db_dir, total_seqs):
+    """
+    Split FASTA files into individual sequences for skani database.
+    
+    Args:
+        split_fasta_dir: Directory containing FASTA files to process
+        output_dir: Base output directory where mgediva_skani_db will be created
+    """
+    #split_fasta_dir = Path(split_fasta_dir)
+    
+    # Create the skani database directory
+    #skani_db_dir = output_dir / "mgediva_skani_db"
+    print("\n" + "="*60)
+    print("STEP 4: Make Skani DB")
+    print("="*60)
+    # Get all FASTA files in the input directory
+    fasta_files = [f.resolve() for f in split_fasta_dir.glob("*.fasta")] + \
+              [f.resolve() for f in split_fasta_dir.glob("*.fa")] + \
+              [f.resolve() for f in split_fasta_dir.glob("*.fna")]
+    
+    check = total = len(list(skani_db_dir.glob("*")))
+
+
+    
+    if check == total_seqs and total_seqs > 0:
+        print(f"Skipping skani db build: {check} sequences already exist in {skani_db_dir}.")
+        return
+    
+    total_files = len(fasta_files)
+    print(f"Processing {total_files} FASTA files...")
+    
+    # AWK command to split FASTA into individual sequence files
+    awk_script = r'''
+    /^>/{
+        split($0, a, " ");
+        id = a[1];
+        gsub("^>", "", id);
+        filename = id ".fasta";
+    }
+    { print > filename }
+    '''
+    
+    # Process each FASTA file
+    start_time = time.time()
+    og_dir = os.getcwd()
+    os.chdir(skani_db_dir)
+    for i, fasta_file in enumerate(fasta_files):
+        print("fasta file", fasta_file)
+        # Change to the skani_db directory so files are created there
+        percent = (i / total_files) * 100
+        elapsed = time.time() - start_time
+        rate = i / elapsed if elapsed > 0 else 0
+        eta = (total_files - i) / rate if rate > 0 else 0
+        print(f"Progress: {i}/{total_files} files ({percent:.1f}%) | "
+              f"Rate: {rate:.1f} files/s | ETA: {eta:.0f}s")
+
+        try:
+            # Run awk command on the FASTA file
+            subprocess.run(
+                ['awk', awk_script, str(fasta_file)],
+                check=True,
+                capture_output=True,
+                text=True
+            )
+        except subprocess.CalledProcessError as e:
+            print(f"Error processing {fasta_file}: {e.stderr}")
+    os.chdir(og_dir)
+    print(f"Done! Individual sequences saved to {skani_db_dir}")
+
+def convert_2bit(input_directory, output_directory):
+    # input_directory = output_name + "_fa"
+    # output_directory = output_name + "_2bit"
+    # if not os.path.exists(output_directory):
+    #         os.makedirs(output_directory)
 
     # Get list of files to process
     fasta_files = [f for f in os.listdir(input_directory) 
                    if os.path.isfile(os.path.join(input_directory, f))]
     total_files = len(fasta_files)
+
+    # check if this has already been done
+    twobit_files = list(output_directory.glob("*.2bit"))
+    
+    if len(twobit_files) == total_files:
+        print(f"Skipping blat convert fasta to 2bit: {len(twobit_files)} sequences already exist in {output_dir}.")
+        return
 
     print("\n" + "="*60)
     print("STEP 2: Converting FASTA files to 2bit format")
@@ -166,12 +244,19 @@ def convert_2bit(output_name):
     print(f"\nStep 2 completed in {total_time:.1f}s")
     print(f"Converted {total_files} files to 2bit format")
 
-def make_ooc(output_name):
-    input_directory = output_name + "_2bit"
+def make_ooc(input_directory):
+    #input_directory = output_name + "_2bit"
     bit_files = [f for f in os.listdir(input_directory) 
                  if f.endswith('.2bit') and os.path.isfile(os.path.join(input_directory, f))]
 
     total_files = len(bit_files)
+
+    # check if this has already been done
+    ooc_files = list(input_directory.glob("*.ooc"))
+    
+    if len(ooc_files) == total_files:
+        print(f"Skipping making ooc files: {len(ooc_files)} sequences already exist in {input_directory}.")
+        return
     
     print("\n" + "="*60)
     print("STEP 3: Generating OOC files from 2bit files")
@@ -216,26 +301,53 @@ def make_ooc(output_name):
 
 if __name__ == "__main__":
     if len(sys.argv) != 4:
-        print("Usage: python make_blat_db.py <input.fasta> <output_dir> <max_bil_bp>")
+        print("Usage: python make_mgediva_db.py <input.fasta> <output_dir> <max_bil_bp>")
         sys.exit(1)
     
     input_fasta = sys.argv[1] #full_database = "/usr1/shared/gtdb_combined.fa"
-    output_dir = sys.argv[2] + "_fa"
+    output_dir = Path(sys.argv[2])
+
+    blat_fasta_split_dir = output_dir / "blat_fasta_db"
+    blat_2bit_split_dir = output_dir / "blat_2bit_db"
+    skani_dir = output_dir / "skani_db"
+
+    for d in [output_dir, blat_fasta_split_dir, blat_2bit_split_dir, skani_dir]:
+        if not os.path.exists(d):
+            os.makedirs(d)
+    
     max_bp = int(sys.argv[3]) * 1000000000
 
-    split_fasta_by_bp(input_fasta, output_dir, max_bp)
+    total_seqs = count_sequences(input_fasta)
+    og_dir = os.getcwd()
+
+    
+    seqs_lengths = split_fasta_by_bp(input_fasta, blat_fasta_split_dir, max_bp, total_seqs)
+    if seqs_lengths: 
+        os.chdir(output_dir)
+        with open("seq_lengths.tsv", "w") as f:
+            for s in seqs_lengths:
+                f.write(f"{s}\t{seqs_lengths[s]}\n")
+        os.chdir(og_dir)
+
 
     print("\nFinished splitting the query file. Converting to 2bit.")
 
-    convert_2bit(sys.argv[2])
+    convert_2bit(blat_fasta_split_dir, blat_2bit_split_dir)
 
     print("\nFinished 2bit conversion. Generating OOC files.")
 
-    make_ooc(sys.argv[2])
+    make_ooc(blat_2bit_split_dir)
 
+    print("\n Finished making ooc files, now making skani database")
+    
+    make_skani_db(blat_fasta_split_dir, skani_dir, total_seqs)
+    
+
+    #finally, remove the directory 
+    #shutil.rmtree(blat_fasta_split_dir)    
     print("\n" + "="*60)
     print("PIPELINE COMPLETED SUCCESSFULLY!")
     print("="*60)
     
 
-# python3 /usr1/gouallin/blat/blat_pipeline/make_blat_db.py /usr1/shared/gtdb_combined.fa gtdb_smart_split_fa 2
+# python3 /usr1/gouallin/blat/blat_pipeline/make_mgediva_db.py /usr1/shared/gtdb_combined.fa gtdb_smart_split_fa 2

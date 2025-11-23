@@ -7,26 +7,119 @@ import pandas as pd
 import sys
 from ete3 import Tree
 import subprocess
-import glob
+#import glob
 import os
 import tempfile
-import bisect
+#import bisect
 from build_database_index import *
 from Bio import SeqIO
+#from collections import defaultdict
+#from twobitreader import TwoBitFile
 
-# Global length cache
-_sequence_length_cache = {}
+# def extract_2bit_file_batch(file_path_2bit, seq_ids):
+#     tb = TwoBitFile(file_path_2bit)
+#     seq_file_dict = dict()
 
-def get_path_from_name(leaf_name, tree):
-    if leaf_name == "NA": return "NA"
-    try: return tree & leaf_name
-    except: 
-        try: 
-            path = tree.get_path(leaf_name)
-            return path
-        except:
-            print("Unable to find path of", leaf_name)
-            return "NA"
+#     for name in seq_ids:
+#         if name in tb:
+#             with tempfile.NamedTemporaryFile(prefix=f"refs{name}", suffix=".fa", delete=False, mode='w') as temp_fa:
+#                     temp_path = temp_fa.name
+#             seq = tb[name]
+#             seq_file_dict[name] = temp_path
+#             with open(temp_path, "w") as out:
+#                 out.write(f">{name}\n{seq}\n")
+
+#     return seq_file_dict
+
+def batch_extract_sequences(ref_ids, index, blat_db):
+    """
+    Extract multiple sequences at once, grouped by 2bit file.
+    Returns dict of ref_id -> fasta_path
+    """
+    # Group ref_ids by their 2bit file
+    # Extract all sequences from each 2bit file
+    ref_to_fasta = {}
+    fasta_to_ref = {}
+    # for each 2bit file, extract these files
+    i = 0
+    for ref in ref_ids:
+        i += 1
+        print("file", i)
+        try:
+            #subprocess.run(cmd, check=True, capture_output=True)
+            ref_to_fasta[ref] = extract_2bit_fasta(ref, index, blat_db)
+            fasta_to_ref[ref_to_fasta[ref]] = ref
+            
+        except subprocess.CalledProcessError as e:
+            print(f"Error extracting sequence {ref}: {e}")
+            continue
+
+    print("ref to fasta", len(ref_to_fasta))
+    return ref_to_fasta, fasta_to_ref
+
+def batch_calculate_ani(query_path, ref_paths_dict, paths_ref_dict):
+    """
+    Calculate ANI for all query-ref pairs using skani in batch mode.
+    Returns dict of ref_id -> ANI value
+    """
+    if not ref_paths_dict:
+        return {}
+    # Create a temporary file listing all reference sequences
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as ref_list:
+        ref_list_path = ref_list.name
+        for ref_path in ref_paths_dict.values():
+            ref_list.write(f"{ref_path}\n")
+    
+    ani_results = {}
+    
+    try:
+        # Run skani with query against all references
+        print(f"skani dist {query_path} --rl {ref_list_path}")
+        result = subprocess.run(
+            ["skani", "dist", query_path, "--rl", ref_list_path],
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        
+        # Parse output
+        lines = result.stdout.strip().split("\n")
+        with open("debugging_batch_skani.txt", "w") as f:
+            for line in lines[1:]:  # Skip header
+                f.write(f"{line}\n")
+                parts = line.split()
+                if len(parts) >= 3:
+                    ref_path = parts[0]
+                    ani_value = float(parts[2])
+                    if ref_path in paths_ref_dict: ani_results[paths_ref_dict[ref_path]] = ani_value
+        # Return -1 for all refs that failed
+        for ref_id in ref_paths_dict.keys():
+            if ref_id not in ani_results:
+                ani_results[ref_id] = 0
+                
+    except (subprocess.CalledProcessError, ValueError) as e:
+        print(f"Error in batch ANI calculation: {e}")
+        with open("debugging_batch_skani_err.txt", "w") as f: f.write(e)
+        input("Press enter to continue")
+        # Return -1 for all refs that failed
+        for ref_id in ref_paths_dict.keys():
+            if ref_id not in ani_results:
+                ani_results[ref_id] = "unk:skani_err"
+    finally:
+        os.remove(ref_list_path)
+    
+    return ani_results
+
+# def get_path_from_name(leaf_name, tree):
+#     if leaf_name == "NA": return "NA"
+#     try: return tree & leaf_name
+#     except: 
+#         try: 
+#             path = tree.get_path(leaf_name)
+#             return path
+#         except:
+#             print("Unable to find path of", leaf_name)
+#             return "NA"
 
 #this is taken from PAReTT and altered
 # def get_div(path1, path2, tree):
@@ -39,16 +132,6 @@ def get_path_from_name(leaf_name, tree):
 #         print("Unable to find the path betweens", path1, path2)
 #         return "unk:unable_connect_two_paths_in_tree"
 
-def count_basepairs(fasta_path):
-    if fasta_path in _sequence_length_cache:
-        return _sequence_length_cache[fasta_path]
-    try:
-        total = sum(len(record.seq) for record in SeqIO.parse(fasta_path, "fasta"))
-        _sequence_length_cache[fasta_path] = total
-        return total
-    except:
-        _sequence_length_cache[fasta_path] = 0
-        return 0
 
 def calculate_distance(seq1, seq2):
     """
@@ -62,10 +145,6 @@ def calculate_distance(seq1, seq2):
     - float: ANI value (or 0 if not found).
     """
     #skani wont work if sequence under 500 bp
-    if count_basepairs(seq1) < 500:
-        return "unk:query_too_short"
-    if count_basepairs(seq2) < 500:
-        return "unk:ref_too_short"
     try:
         # Run the skani command to calculate distance
         result = subprocess.run(
@@ -88,7 +167,7 @@ def calculate_distance(seq1, seq2):
             return -1
 
     except (IndexError, ValueError, subprocess.CalledProcessError) as e:
-        print(f"Error running skani: {e}")
+        #print(f"Error running skani: {e}, if sequence was under 500 bp, skani will not work")
         return "unk:skani_err"  # Return 0 in case of errors
 
 def extract_2bit_fasta(ref_id, index, blat_db):
@@ -130,7 +209,6 @@ def check_div_cache(sp1, sp2, cache):
     elif (sp2, sp1) in cache: return cache[(sp2, sp1)]
     return None
 
-
 def filter_blat(inf, outf, q_species, index, tree, q_seq, blat_db, minIdentity):
     div_cache = dict() # will be (species1, species2): divergence time
     #path_cache = dict() # will be species: name of it in the tree
@@ -138,14 +216,14 @@ def filter_blat(inf, outf, q_species, index, tree, q_seq, blat_db, minIdentity):
     #get a df or array that converts all of the columns fomr input file .psl into something readable
 
     # get the name of the q species that is in the tree
+    q_og_species = q_species
     if q_species != "unclassified": q_species = tree.get_path_identifier(tree.get_path(q_species))
-    #else: path1 = None
-    #path_cache[q_species] = path1
-    #write header of input file to putput file
+    
+    lines_to_process = []
+    ref_ids_needing_ani = set()
+
     with open(inf, 'r') as infile, open(outf, 'w') as outfile:
-        # Write a new header to file that is tabulated and has our new guys on the end
-        #we only care about query, sequence
-        #outfile.write("match\tmismatch\trep. match\tN's\tQ gap count \t Q gap bases\tT gap count \tT gap bases\tstrand\tQ name\tQ size\tQ start\t Q end\tT name\tT size\tT start\tT end\tblock count\tblockSizes\tqStarts\ttStarts\tQuery_Species\tReference_Species\tDivergence_Time\n")
+        
         outfile.write("match\tmismatch\trep. match\tN's\tQ gap count \tQ gap bases\tT gap count\tT gap bases\tstrand\tQ name\tQ size\tQ start\t Q end\tT name\tT size\tT start\tT end\tblock count\tblockSizes\tqStarts\ttStarts\tPercent Identity\tQuery Species\tReference Species\tDivergence Time\tANI bt seqs(if div=unk)\n")
         # Process each line in the BLAT file
         for line in infile:
@@ -170,7 +248,7 @@ def filter_blat(inf, outf, q_species, index, tree, q_seq, blat_db, minIdentity):
                 print("ERROR, your index mapping database genomes to their species and locations was not made correctly.")
                 print(f"Unable to find the species for {ref_id} in {index}. Skipping.")
                 continue  # Skip this line if no species found for reference sequence
-            if q_species == "unclassified" or ref_species == "unclassified": # or path1 == None:
+            if q_species in ["unclassified", "NA"] or ref_species in ["unclassified", "NA"]: # or path1 == None:
                 div = "unk:unclassified_species"
             else:
                 div = check_div_cache(q_species, ref_species, div_cache)
@@ -186,18 +264,59 @@ def filter_blat(inf, outf, q_species, index, tree, q_seq, blat_db, minIdentity):
             if isinstance(div, (int, float)) and div < 1:
                 continue  # Skip lines with less than 1 MYA
             elif isinstance(div, str): #if div is unk, then find ani
-                if ref_id in ani_cache: ani = ani_cache[ref_id]
-                else: 
-                    ani = find_ani(q_seq, ref_id, blat_db, index) 
-                    ani_cache[ref_id] = ani
+                lines_to_process.append({
+                'columns': columns,
+                'ref_id': ref_id,
+                'perIdent': perIdent,
+                'ref_species': ref_species,
+                'div': div
+                })
+                ref_ids_needing_ani.add(ref_id)
+                continue
+                #if ref_id in ani_cache: ani = ani_cache[ref_id]
+                #else: 
+                #    ani = find_ani(q_seq, ref_id, blat_db, index) 
+                #    ani_cache[ref_id] = ani
+                #if isinstance(ani, (int, float)):
+                #    if ani < 0 or ani >= 95:
+                #        continue #skip lines with 95 or more ani since that means they are same species
+                        # also skip lines where ani is unknown, since there is no way to know its relation to the query
+
+            # write everyone that made it through the filters
+            new_line = "\t".join(columns)
+            outfile.write(new_line.strip() + f"\t{perIdent}\t{q_og_species}\t{ref_species}\t{div}\t{ani}\n")
+        
+        # now go through everyone that needs ani taken
+        if ref_ids_needing_ani:
+            print(f"Extracting {len(ref_ids_needing_ani)} reference sequences...")
+            ref_fastas, fastas_ref = batch_extract_sequences(ref_ids_needing_ani, index, blat_db)
+            
+            print(f"Calculating ANI for {len(ref_fastas)} sequences...")
+            ani_results = batch_calculate_ani(q_seq, ref_fastas, fastas_ref)
+            ani_cache.update(ani_results)
+            
+            # Cleanup temporary files
+            for fasta_path in ref_fastas.values():
+                try:
+                    os.remove(fasta_path)
+                except:
+                    pass
+
+            # then write them to file if they pass
+            for line_data in lines_to_process:
+                columns = line_data['columns']
+                ref_id = line_data['ref_id']
+                perIdent = line_data['perIdent']
+                div = line_data['div']
+                
+                ani = "NA"
+                ani = ani_cache.get(ref_id, "unk:skani_err")
                 if isinstance(ani, (int, float)):
                     if ani < 0 or ani >= 95:
-                        continue #skip lines with 95 or more ani since that means they are same species
-                        # also skip lines where ani is unknown, since there is no way to know its relation to the query
-        
-            # Write the line with the added divergence time, query species, and reference species
-            new_line = "\t".join(columns)
-            outfile.write(new_line.strip() + f"\t{perIdent}\t{q_species}\t{lookup_tree_leaf_name(index, ref_id)}\t{div}\t{ani}\n")
+                        continue
+                # Write the line with the added divergence time, query species, and reference species
+                new_line = "\t".join(columns)
+                outfile.write(new_line.strip() + f"\t{perIdent}\t{q_og_species}\t{lookup_species(index, ref_id)}\t{div}\t{ani}\n")
 
 if __name__ == "__main__":
     # Check if the correct number of command-line arguments is provided
@@ -213,5 +332,5 @@ if __name__ == "__main__":
     q_seq = sys.argv[6]
     blat_db = sys.argv[7]
     index = load_hash_table(index)
-    minIdentity = sys.argv[8]
+    minIdentity = float(sys.argv[8])
     filter_blat(input_file, output_file, q_species, index, tree, q_seq, blat_db, minIdentity)
