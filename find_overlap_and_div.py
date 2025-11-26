@@ -16,7 +16,7 @@ from find_overlap import *
 
 #if it finds regions that overlap and map to the same species, it will combine them
 
-def find_overlap_and_div(rows, output_file, tree, blat_db, index):
+def find_overlap_and_div(rows, output_file, tree, skani_db, index):
     div_cache = dict()
     ani_cache = dict() # (id1, id2) : ani
     #"Q name\tQ size\tQ start\tQ end\tT name\tT size\tT start\tT end\tPercent Identity\tQuery Species\tReference Species\tDivergence Time\tANI bt seqs(if div=unk)\tANI bt ref seqs(if species unk)\n")
@@ -30,7 +30,7 @@ def find_overlap_and_div(rows, output_file, tree, blat_db, index):
 
     i = 0
 
-    start_positions = [int(row[1][qs]) for row in rows]
+    # start_positions = [int(row[1][qs]) for row in rows]
 
     for i, row1 in enumerate(rows):
         if i in used:
@@ -54,13 +54,17 @@ def find_overlap_and_div(rows, output_file, tree, blat_db, index):
                 continue
 
             # if they are both equal and known
-            if species1 == species2 and "unclassified" not in [species1, species2]:
+            sp1_leaf = lookup_tree_leaf_name(index, row1[tname])
+            sp2_leaf = lookup_tree_leaf_name(index, row2[tname])
+
+            # if the leafs are the same and they are both classfied, then skip
+            if (sp1_leaf == sp2_leaf or species1 == species2) and "unclassified" not in [species1, species2]:
                 continue
-            div = check_div_cache(species1, species2, div_cache)
+            div = check_cache(sp1_leaf, sp2_leaf, div_cache)
             if div == None:
                 # Get the divergence time between query species and reference species
-                div = tree.divergence(species1, species2)
-                div_cache[(species1, species2)] = div
+                div = tree.divergence(sp1_leaf, sp2_leaf)
+                div_cache[(sp1_leaf, sp2_leaf)] = div
             
             ani = "NA"
 
@@ -69,10 +73,9 @@ def find_overlap_and_div(rows, output_file, tree, blat_db, index):
                 #get the ani instead
                 id1 = row1[tname]
                 id2 = row2[tname]
-                if (id1, id2) in ani_cache: ani = ani_cache[(id1, id2)]
-                elif (id2, id1) in ani_cache: ani = ani_cache[(id2, id1)]
-                else: 
-                    ani = find_ani_overlap(id1, id2, blat_db, index)
+                ani = check_cache(id1, id2, ani_cache)
+                if ani == None:
+                    ani = find_ani_overlap(id1, id2, skani_db, index)
                     ani_cache[(id1, id2)] = ani
 
                 
@@ -106,17 +109,17 @@ def find_overlap_and_div(rows, output_file, tree, blat_db, index):
 if __name__ == "__main__":
     # Check if the correct number of command-line arguments is provided
     #
-    if len(sys.argv) != 6:
-        print("Usage: python3 find_overlap_and_div.py <file of blatdiver output> <output file name> <tree> <blat_db> <index of species>")
+    if len(sys.argv) != 5:
+        print("Usage: python3 find_overlap_and_div.py <file of blatdiver output> <output file name> <tree> <mgediva_db>")
         sys.exit(1)
     input_file = sys.argv[1]
     output = sys.argv[2]
     tree = Divergence_Tree_Preprocessed(sys.argv[3])
-    blat_db = sys.argv[4]
-    index = load_hash_table(sys.argv[5])
+    index = load_hash_table(f"{sys.argv[4]}/mgediva_db_index.pkl")
+    skani_db = f"{sys.argv[4]}/skani_db"
 
     #print("Compressing")
     rows = compress(input_file)
     #print("Rows before:", len(rows))
-    find_overlap_and_div(rows, output, tree, blat_db, index)
+    find_overlap_and_div(rows, output, tree, skani_db, index)
     print("Filtered file written to", output)

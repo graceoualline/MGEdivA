@@ -6,7 +6,13 @@ import csv
 import sys
 from filter_blat import *
 
-def find_ani_overlap(q_id, ref_id, blat_db, kraken):
+def crude_ani_overlap(s1, e1, s2, e2, len1, len2):
+    overlap = overlaps(s1, e1, s2, e2)
+    if overlap == None: return -1
+    if 0 in [len1, len2]: return -1
+    return (overlap/min(len1, len2))*100
+
+def find_ani_overlap(q_id, ref_id, skani_db, index, cutoff = 500):
     """
     Finds the ANI between a query sequence and a reference sequence stored in a .2bit file.
 
@@ -18,13 +24,12 @@ def find_ani_overlap(q_id, ref_id, blat_db, kraken):
     Returns:
     - float: ANI value (or None if reference is not found).
     """
-    q_seq = extract_2bit_fasta(q_id, kraken, blat_db)
-    ref_fasta_name = extract_2bit_fasta(ref_id, kraken, blat_db)
+    q_seq = f"{skani_db}/{q_id}.fasta"
+    ref_fasta_name = f"{skani_db}/{ref_id}.fasta"
+    if lookup_length(index, q_id) < cutoff or lookup_length(index, ref_id) < cutoff: return "unk:too_short"
         
     distance = calculate_distance(q_seq, ref_fasta_name)
 
-    os.remove(q_seq)
-    os.remove(ref_fasta_name)
     return distance
 
 #will keep Q name, Q start, Q end, T name(s), Q spec, T specie(s), divergence time(s), ani
@@ -106,10 +111,11 @@ def build_overlap_row(row1, row2, new_start, new_end, ani_value):
     new_row.append(str(ani_value))
     return "\t".join(new_row)
 
-def find_overlap(rows, output_file, blat_db, gtdb_index):
+def find_overlap(rows, output_file, skani_db, gtdb_index):
     qs = 2 #q start is 2
     qe = 3 # qend is 3
-    rsp = 10 #ref species is 7
+    rid = 4 # ref_id is 4
+    rsp = 10 #ref species is 10
     new_rows = set()
     rows = sorted(rows, key=lambda x: (int(x[qs])))
     used = set()
@@ -135,8 +141,10 @@ def find_overlap(rows, output_file, blat_db, gtdb_index):
                 break
             
             if overlaps(s1, e1, s2, e2) == None: continue
-
-            if species1 == species2 and "unclassified" not in [species1, species2]:
+            sp1_leaf = lookup_tree_leaf_name(gtdb_index, row1[rid])
+            sp2_leaf = lookup_tree_leaf_name(gtdb_index, row2[rid])
+            # skip if they are the same and both classifed
+            if (sp1_leaf == sp2_leaf or species1 == species2) and "unclassified" not in [species1, species2]:
                 continue
 
             new_start, new_end = max(s1, s2), min(e1, e2)
@@ -148,7 +156,8 @@ def find_overlap(rows, output_file, blat_db, gtdb_index):
                 if (id1, id2) in ani_cache: ani = ani_cache[(id1, id2)]
                 elif (id2, id1) in ani_cache: ani = ani_cache[(id2, id1)]
                 else: 
-                    ani = find_ani_overlap(id1, id2, blat_db, gtdb_index)
+                    ani = find_ani_overlap(id1, id2, skani_db, gtdb_index)
+                    if ani == "unk:too_short": ani = crude_ani_overlap(s1, e1, s2, e2, int(row1[5]), int(row2[5]))
                     ani_cache[(id1, id2)] = ani
                 if type(ani) != str and ani < 95:
                     new_row = build_overlap_row(row1, row2, new_start, new_end, ani)
@@ -157,7 +166,7 @@ def find_overlap(rows, output_file, blat_db, gtdb_index):
                     used.add(rows[j])
                     break
             #if it overlaps and the species are not equal
-            elif species1 != species2:
+            elif sp1_leaf != sp2_leaf:
                 #There was no ani between species considered since they had dif names
                 new_row = build_overlap_row(row1, row2, new_start, new_end, "NA")
                 new_rows.add(new_row)
@@ -173,14 +182,14 @@ def find_overlap(rows, output_file, blat_db, gtdb_index):
 if __name__ == "__main__":
     # Check if the correct number of command-line arguments is provided
     #
-    if len(sys.argv) != 5:
-        print("Usage: python3 find_overlap.py <file of blatdiver output> <output file name> <blat_db> <gtdb_species_index>")
+    if len(sys.argv) != 4:
+        print("Usage: python3 find_overlap.py <file of blatdiver output> <output file name> <mgediva_db>")
         sys.exit(1)
     input_file = sys.argv[1]
     output = sys.argv[2]
-    blat_db = sys.argv[3]
-    gtdb_index = load_hash_table(sys.argv[4])
+    skani_db= f"{sys.argv[3]}/skani_db"
+    gtdb_index = load_hash_table(f"{sys.argv[3]}/mgediva_db_index.pkl")
 
     rows = compress(input_file)
-    find_overlap(rows, output, blat_db, gtdb_index)
+    find_overlap(rows, output, skani_db, gtdb_index)
     print("Filtered file written to", output)

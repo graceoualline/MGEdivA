@@ -134,11 +134,12 @@ def make_skani_db(split_fasta_dir, skani_db_dir, total_seqs):
     print("STEP 4: Make Skani DB")
     print("="*60)
     # Get all FASTA files in the input directory
+
     fasta_files = [f.resolve() for f in split_fasta_dir.glob("*.fasta")] + \
               [f.resolve() for f in split_fasta_dir.glob("*.fa")] + \
               [f.resolve() for f in split_fasta_dir.glob("*.fna")]
     
-    check = total = len(list(skani_db_dir.glob("*")))
+    check = len(list(skani_db_dir.glob("*")))
 
 
     
@@ -165,7 +166,6 @@ def make_skani_db(split_fasta_dir, skani_db_dir, total_seqs):
     og_dir = os.getcwd()
     os.chdir(skani_db_dir)
     for i, fasta_file in enumerate(fasta_files):
-        print("fasta file", fasta_file)
         # Change to the skani_db directory so files are created there
         percent = (i / total_files) * 100
         elapsed = time.time() - start_time
@@ -311,7 +311,7 @@ if __name__ == "__main__":
     blat_2bit_split_dir = output_dir / "blat_2bit_db"
     skani_dir = output_dir / "skani_db"
 
-    for d in [output_dir, blat_fasta_split_dir, blat_2bit_split_dir, skani_dir]:
+    for d in [output_dir, blat_fasta_split_dir, skani_dir, blat_2bit_split_dir]:
         if not os.path.exists(d):
             os.makedirs(d)
     
@@ -340,11 +340,8 @@ if __name__ == "__main__":
 
     print("\n Finished making ooc files, now making skani database")
     
-    make_skani_db(blat_fasta_split_dir, skani_dir, total_seqs)
-    
-
-    #finally, remove the directory 
-    #shutil.rmtree(blat_fasta_split_dir)    
+    make_skani_db(Path(blat_fasta_split_dir), Path(skani_dir), total_seqs)
+        
     print("\n" + "="*60)
     print("PIPELINE COMPLETED SUCCESSFULLY!")
     print("="*60)

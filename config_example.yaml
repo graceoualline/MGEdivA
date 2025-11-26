@@ -2,9 +2,8 @@
 
 # Required arguments:
 query: /usr1/gouallin/blat/blat_pipeline/test/acrB.fasta
-output: mgediva_test_new_tree_results_acrB
-database: /usr1/shared/gtdb_2bil_split_2bit/ # blat database
-index: /usr1/shared/mgediva_gtdb_2bil_index.pkl #index that maps sequences in the database to their species and locations
+output: mgediva_test_results_acrBS
+database: /usr1/shared/mgediva_gtdb_db/ # blat database
 kraken: /usr1/shared/kraken2_custom_db/ # path to the kraken database
 tree: /usr1/gouallin/blat/divergence_tree/ # path to the tree directory
 

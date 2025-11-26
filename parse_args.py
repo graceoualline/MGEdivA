@@ -8,7 +8,8 @@ class Config:
     input_fasta: str #query fasta
     chunk_size: int # how we want to split up the query to run in blat
     output_dir: str # output dir name
-    database: Path # blat database
+    blat_db: Path # blat db path
+    skani_db: Path # skani db path
     index: str #index that maps sequences in the database to their species and locations
     max_threads: int # number of threads the user wants to use
     kraken_db: Path # path to the kraken database
@@ -32,10 +33,10 @@ def parse_args():
         
     Example commands:\n
     # Use config file with command-line overrides\n
-    python blatdiver.py --config my_config.yaml --threads 46 --chunk 100000\n
+    python mgediva.py --config my_config.yaml --threads 46 --chunk 100000\n
     
     # Use only command-line arguments (traditional way)\n
-    python blatdiver.py -q input.fasta -o output -d database -tr tree -i index -k kraken"""
+    python mgediva.py -q input.fasta -o output -d database -tr tree -i index -k kraken"""
     )
     parser.add_argument(
         "--config", type=str, help="Path to a YAML config file with default arguments.")
@@ -44,19 +45,19 @@ def parse_args():
     parser.add_argument(
         "-o", "--output", help="Name of your output directory")
     parser.add_argument(
-        "-d", "--database", help="Path to the blat database to use")
+        "-d", "--database", help="Path to the mgediva database")
     parser.add_argument(
-        "-tr", "--tree", help="Directory path containing The Time Tree of Life tree (TimeTree_v5_Final.nwk), and its preprocessed files")
-    parser.add_argument(
-        "-i", "--index", help="Index of sequences in your blat db and their species and locations")
+        "-tr", "--tree", help="Directory containing The Time Tree of Life tree (TimeTree_v5_Final.nwk), and its preprocessed files")
     parser.add_argument(
         "-k", "--kraken", help="Path to Kraken2 database")
+    parser.add_argument(
+        "-i", "--index", type = str, help="(Optional) Index of sequences in your db, of their species, length, and tree leaf names. Default is the one built in the mgediva database. Can specify a different index here if you want to manually define each sequence's species.")
     parser.add_argument(
         "-t", "--threads", type=int, help="(Optional) Number of threads to use. Highly recommend a large number of threads (default: 1)")
     parser.add_argument(
         "-c", "--chunk", type=int, help="(Optional) Size for splitting sequences to feed to blat (default: 100000)")
     parser.add_argument(
-        "-s", "--species", type = str, help = "(Optional) Species of the sequence(s) in your input fasta (replace spaces with '_').")
+        "-s", "--species", type = str, help = "(Optional) Species of the sequence(s) in your input fasta (replace spaces with '_'). If your file has multiple species, we recommend doing separate jobs for each species.")
     parser.add_argument(
         "-minScore", type = int, help = "(Optional) Minimum alignment score threshold for blat (default: 30)")
     parser.add_argument(
@@ -91,7 +92,7 @@ def parse_args():
         "--remove",
         action=BooleanOptionalAction,
         default=None,
-        help="(Optional), Clean up temporary files (default: True). Use --remove to enable, --no-remove to disable."
+        help="(Optional), Clean up temporary files (default: False). Use --remove to enable, --no-remove to disable."
     )
     
     parser.add_argument(
@@ -190,11 +191,11 @@ def merge_config_and_args(args, config_data=None):
         'output': ('output', None),
         'database': ('database', None),
         'tree': ('tree', None),
-        'index': ('index', None),
+        'index': ('index', 'default_placeholder'),
         'kraken': ('kraken', None),
         'threads': ('threads', 1),
         'chunk': ('chunk', 100000),
-        'remove': ('remove', True),
+        'remove': ('remove', False),
         'species': ('species', None),
         'minScore': ('minScore', 30),
         'minIdentity': ('minIdentity', 0),
@@ -225,7 +226,14 @@ def merge_config_and_args(args, config_data=None):
         elif isinstance(value, int):
             # Handle integer representations
             merged_config[param] = bool(value)
-          
+
+    if merged_config['index'] == 'default_placeholder' or merged_config['index'] is None:
+        if merged_config['database']:
+            merged_config['index'] = f"{merged_config['database']}/mgediva_db_index.pkl"
+        else:
+            merged_config['index'] = None
+
+
     return merged_config
 
 def validate_required_params(config_dict):

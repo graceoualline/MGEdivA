@@ -41,11 +41,11 @@ def combine_and_cleanup_psl_files(args):
         if remove: os.rmdir(output_chunk_dir)
 
 def run_div_filter(job):
-    all_blat_raw, output_file, species, index, tree, tmp_fasta_path, database, minIdentity = job
+    all_blat_raw, output_file, species, index, tree, tmp_fasta_path, database, minIdentity, skani_db = job
     index = load_hash_table(index)
     try:
         #run the first round of filtering on the raw blat data
-        filter_blat(all_blat_raw, output_file, species, index, tree, tmp_fasta_path, database, minIdentity)
+        filter_blat(all_blat_raw, output_file, species, index, tree, tmp_fasta_path, database, minIdentity, skani_db)
     except subprocess.CalledProcessError as e:
         print(f"Error running filter_blat on chunk {output_file}:\n{e.stderr.decode().strip()}")
     return 1
@@ -107,7 +107,7 @@ def run_all_filters(chunk_jobs, c: Config):
         for j in jobs:
             chunk_record, idx, original_id, species, tmp_fasta_path, all_blat_raw, output_file, c = j
             if os.path.exists(output_file): print(f"Skipping {output_file}, already exists.")
-            else: div_jobs.append((all_blat_raw, output_file, species, c.index, c.tree, tmp_fasta_path, c.database, c.minIdentity))
+            else: div_jobs.append((all_blat_raw, output_file, species, c.index, c.tree, tmp_fasta_path, c.blat_db, c.minIdentity, c.skani_db))
         if len(div_jobs) > 0:
             #print whatever command you are running
             with Pool(processes=c.max_threads) as pool:
@@ -134,13 +134,13 @@ def run_all_filters(chunk_jobs, c: Config):
         if make_overlap:
             overlap = os.path.join(c.output_dir, f"chunk_{idx}_{original_id}_overlap.tsv")
             if os.path.exists(overlap): print(f"Skipping {overlap}, already exists.")
-            else: filter_jobs.append(("overlap", (mgediva_output_file, overlap, c.database, c.index)))
+            else: filter_jobs.append(("overlap", (mgediva_output_file, overlap, c.skani_db, c.index)))
 
         # overlap div filter
         if make_overlap_div:
             overlap_div = os.path.join(c.output_dir, f"chunk_{idx}_{original_id}_overlap_div.tsv")
             if os.path.exists(overlap_div): print(f"Skipping {overlap_div}, already exists.")
-            else: filter_jobs.append(("overlap_div", (mgediva_output_file, overlap_div, c.tree, c.database, c.index)))
+            else: filter_jobs.append(("overlap_div", (mgediva_output_file, overlap_div, c.tree, c.skani_db, c.index)))
     
     #run this first round of filtering
     if len(filter_jobs) > 0:
@@ -193,7 +193,7 @@ def run_blat_on_chunk(chunk_jobs, blat_files, ooc_files, c: Config):
                 output_path = os.path.join(output_chunk, output_path)
                 if os.path.exists(output_path): print(f"{output_path} skipped, already exists")
                 else:
-                    jobs.append((c.database, blat_files[i], ooc_files[i], tmp_fasta_path, output_path, c.minScore))
+                    jobs.append((c.blat_db, blat_files[i], ooc_files[i], tmp_fasta_path, output_path, c.minScore))
     if len(jobs) > 0:
         #print whatever command you are running
         with Pool(processes=c.max_threads) as pool:
@@ -340,7 +340,8 @@ def main():
         input_fasta=merged_config['query'],
         chunk_size=merged_config['chunk'],
         output_dir=merged_config['output'],
-        database=Path(merged_config['database']),
+        blat_db=Path(f"{merged_config['database']}/blat_2bit_db"),
+        skani_db=Path(f"{merged_config['database']}/skani_db"),
         index=merged_config['index'],
         max_threads=merged_config['threads'],
         kraken_db=merged_config['kraken'],
@@ -356,7 +357,9 @@ def main():
     print("Configuration:")
     print(f"  Input FASTA: {c.input_fasta}")
     print(f"  Output Directory: {c.output_dir}")
-    print(f"  Database: {c.database}")
+    print(f"  Blat Database: {c.blat_db}")
+    print(f"  Skani Database: {c.skani_db}")
+    print(f"  Index: {c.index}")
     print(f"  Threads: {c.max_threads}")
     print(f"  Chunk Size: {c.chunk_size}")
     print(f"  Species: {c.species or 'Auto-detect with Kraken'}")
@@ -372,9 +375,9 @@ def main():
     print("Start time:", datetime.now())
 
     #check and ensure the database is sound
-    blat_files = [Path(f) for f in os.listdir(c.database) if f.endswith(".2bit")]
+    blat_files = [Path(f) for f in os.listdir(c.blat_db) if f.endswith(".2bit")]
     blat_files.sort()
-    ooc_files = [Path(f) for f in os.listdir(c.database) if f.endswith(".ooc")]
+    ooc_files = [Path(f) for f in os.listdir(c.blat_db) if f.endswith(".ooc")]
     ooc_files.sort()
     if len(blat_files) != len(ooc_files):
         raise ValueError(

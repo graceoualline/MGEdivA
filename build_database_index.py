@@ -16,10 +16,8 @@ def get_one(path_iter):
         raise ValueError(f"Expected 1 file, found {len(paths)}: {paths}. You do not have the proper files needed for the divergence tree.")
     return str(paths[0])
 
-def load_H5(file):
-    store = pd.HDFStore(file)
-    df = store["table"]
-    return df
+def load_np(file):
+    return np.load(file, allow_pickle=True)
 
 class Divergence_Tree_Preprocessed():
     """
@@ -29,23 +27,23 @@ class Divergence_Tree_Preprocessed():
         tree_path = Path(tree_dir)
         nwk_file   = get_one(tree_path.glob("*.nwk"))
         plk_file   = get_one(tree_path.glob("*.pkl"))
-        index_file = get_one(tree_path.glob("*.index.h5"))
-        mins_file  = get_one(tree_path.glob("*.mins.h5"))
-        tour_file  = get_one(tree_path.glob("*.tour.h5"))
+        index_file = get_one(tree_path.glob("*.index.npy"))
+        mins_file  = get_one(tree_path.glob("*.mins.npy"))
+        tour_file  = get_one(tree_path.glob("*.tour.npy"))
 
         print("Loading Divergence Tree")
         self.tree = Tree(nwk_file)
         self.species_dist = load_hash_table(plk_file)
-        self.index = load_H5(index_file)
-        self.mins = load_H5(mins_file)
-        self.tour = load_H5(tour_file)[0].tolist()
+        self.index = load_np(index_file)
+        self.mins = load_np(mins_file)
+        self.tour = load_np(tour_file)
         print("Divergence Tree Loaded!")
         
     def get_min_index(self, i,j):
         """Range min query on L[i:j]"""
         m = int(np.log2(j-i))
-        minimum = min(self.mins.iat[m, i], self.mins.iat[m, j-2**m])
-        min_index = self.index.iat[m, i] if self.mins.iat[m, i] == minimum else self.index.iat[m, j-2**m]
+        minimum = min(self.mins[m, i], self.mins[m, j-2**m])
+        min_index = self.index[m, i] if self.mins[m, i] == minimum else self.index[m, j-2**m]
         return min_index
 
     def divergence(self, a, b):
@@ -100,40 +98,11 @@ class Divergence_Tree_Preprocessed():
             current = current.up
         return path_names[0]
 
-#first step, get the locations of all sequence ids
-def get_seq_id_loc(two_bit_dir, input_files):
-    seq_id_loc = set()
-    
-    print(f"Processing {len(input_files)} 2bit files...")
-    for i, inputf in enumerate(input_files, 1):
-        two_bit_path = os.path.join(two_bit_dir, inputf)
+def get_seq_id_length(seq_lengths):
+    df = pd.read_csv(str(seq_lengths), header = None, sep = "\t")
+    return list(df.itertuples(index=False, name=None))
 
-        print(f"Progress: {i}/{len(input_files)} - Processing {inputf}")
-
-        #this will make a temp file
-        with tempfile.NamedTemporaryFile(mode="w+", delete=False) as temp_file:
-            temp_path = temp_file.name
-
-        # Run twoBitInfo to get sequence info
-        try:
-            result = subprocess.run(["twoBitInfo", two_bit_path, temp_path],
-                                    capture_output = True,
-                                    text = True,
-                                    check = True)
-        
-            # Read the sequence IDs and write with file name
-            with open(temp_path, "r") as f:
-                for line in f:
-                    seq_id = line.split()[0]
-                    seq_id_loc.add((seq_id, inputf))
-        except subprocess.CalledProcessError as e:
-            print(f"ERROR processing {inputf}: {e}")
-        finally:
-            os.remove(temp_path)
-    print(f"Found {len(seq_id_loc)} total sequences")
-    return seq_id_loc
-
-def combine_seq_spec_loc(species_file, seq_id_loc, two_bit_dir, tree):
+def combine_seq_spec_len(species_file, seq_id_len, tree):
     # Step 1: Load species data into a dictionary
     seq_to_species = {}
     all_species = set()
@@ -149,11 +118,7 @@ def combine_seq_spec_loc(species_file, seq_id_loc, two_bit_dir, tree):
         print(f"Loaded {len(seq_to_species)} existing species annotations")
     else:
         raise Exception("No species file provided or file doesn't exist")
-    ##Debug
-    # seq_to_species_test = [('JAHAAN010000031.1', 'unclassified'), ('QHWJ01000176.1', 'Rhizobiaceae'), ('WQSI01000087.1', 'unclassified'), ('NZ_QJUG01000292.1', 'Nonomuraea gerenzanensis'), ('JAJXTT010000076.1', 'Paracoccus versutus'), ('JAADEE010000229.1', 'Acinetobacter baumannii')]
-    # all_species = [i for _, i in seq_to_species_test]
-    # print(seq_to_species_test)
-    # print(all_species)
+    
     #Step 2: Create a dictionary of all species, and where they are in the tree
     print("Obtaining species path in the tree")
     print(f"There are {len(all_species)} species")
@@ -168,21 +133,18 @@ def combine_seq_spec_loc(species_file, seq_id_loc, two_bit_dir, tree):
     print("Paths obtained. Creating hash table.")
     #Step 3: Process each sequence
     result_dict = {}
-    # print("seq_id_loc:", seq_id_loc)
-    for i, seq_loc in enumerate(seq_id_loc, 1):
+    for i, seq_len in enumerate(seq_id_len, 1):
         #make sure there are two entries
-        if len(seq_loc) >= 2:
-            seq_id, file_location = seq_loc[0], seq_loc[1]
+        if len(seq_len) >= 2:
+            seq_id, length = seq_len[0], seq_len[1]
 
             # Progress indicator
-            if i % 100 == 0 or i == len(seq_id_loc):
-                print(f"Progress: {i}/{len(seq_id_loc)} sequences processed")
+            if i % 100 == 0 or i == len(seq_id_len):
+                print(f"Progress: {i}/{len(seq_id_len)} sequences processed")
 
             # if the sequence does not have a species, go find it with kraken
             species = seq_to_species.get(seq_id, "unclassified")
-            #print("seq_id, seq_to_species[seq_id]", seq_id, species)
-            result_dict[seq_id] = (species, file_location, species_leaf_name[species])
-    # print("RESULT DIcT:", result_dict)
+            result_dict[seq_id] = (species, length, species_leaf_name[species])
     return result_dict
 
 def load_hash_table(index_file):
@@ -202,13 +164,9 @@ def lookup_species(hash_table, seq_id):
     tuple = hash_table.get(seq_id, "unclassified")
     return tuple[0]
 
-def lookup_location(hash_table, seq_id):
-    """
-    Looks up the species name for a given seq_id using the hash table.
-    Returns "unclassified" if not found.
-    """
-    tuple = hash_table.get(seq_id, "unclassified")
-    return tuple[1]
+def lookup_length(hash_table, seq_id):
+    tuple = hash_table.get(seq_id, 0)
+    return int(tuple[1])
 
 def lookup_tree_leaf_name(hash_table, seq_id):
     """
@@ -219,51 +177,43 @@ def lookup_tree_leaf_name(hash_table, seq_id):
     return tuple[2]
 
 if __name__ == "__main__":
-    if len(sys.argv) != 5:
-        print("Usage: python3 build_database_index.py <2bit_blat_db_dir> <output_file_name> <species_file> <tree>")
-        print("  2bit_blat_db_dir: Directory containing .2bit files")
-        print("  output_file_name: Output .pkl file name")
+    if len(sys.argv) != 4:
+        print("Usage: python3 build_database_index.py <mgediva_built_db> <species_file> <tree>")
+        print("  the mgediva_db that was built by make_mgediva_db.py")
         print("  species_file: Existing species annotation file")
         print("  tree: Time Tree of Life .nwk file")
         sys.exit(1)
-    two_bit_dir = sys.argv[1]
-    final_output = sys.argv[2]
-    species_file = sys.argv[3]
-    tree = Divergence_Tree_Preprocessed(sys.argv[4])
+    mgediva_db = sys.argv[1]
+    species_file = sys.argv[2]
 
-    if not os.path.exists(two_bit_dir):
-        print(f"ERROR: 2bit directory {two_bit_dir} does not exist")
-        sys.exit(1)
+    seq_lengths = Path(f"{sys.argv[1]}/seq_lengths.tsv")
+    if not seq_lengths.exists():
+        raise FileNotFoundError(f"File does not exist: {seq_lengths}, please make sure make_mgediva_db.py was run correctly, or manually make a file with the first column being seq_id, and second column seq_length.")
+    final_output = f"{sys.argv[1]}/mgediva_db_index.pkl"
+    tree = Divergence_Tree_Preprocessed(sys.argv[3])
 
-    input_files = [f for f in os.listdir(two_bit_dir) 
-                 if f.endswith('.2bit') and os.path.isfile(os.path.join(two_bit_dir, f))]
-
-    if not input_files:
-        print(f"ERROR: No .2bit files found in {two_bit_dir}")
-        sys.exit(1)
-
-    #first step, get the locations of all sequence ids
-    #used to be get_seq_ids.py
     print("\n" + "="*60)
-    print("STEP 1: Extracting sequence IDs from 2bit files")
+    print("STEP 1: Extracting sequence IDs and their lengths")
     print("="*60)
-    seq_id_loc = get_seq_id_loc(two_bit_dir, input_files)
+    seq_id_length = get_seq_id_length(seq_lengths)
     #seq_id_loc = [('JAHAAN010000031.1', 'f1'), ('QHWJ01000176.1', 'f2'), ('WQSI01000087.1', 'f3'), ('NZ_QJUG01000292.1', 'f4'), ('JAJXTT010000076.1', 'f5'), ('JAADEE010000229.1', 'f6')]
     # next, we use a file that connects seq_id and species determined by kraken
-    # and add that to the index # use to be combine_species_location.py
+    # and add that to the index # used to be combine_species_location.py
+    print(f"{seq_lengths} loaded.")
     print("\n" + "="*60) 
     print("STEP 2: Combining with species data and Kraken classification")
     print("="*60)
-    seq_species_loc = combine_seq_spec_loc(species_file, seq_id_loc, two_bit_dir, tree)
+    seq_species_len = combine_seq_spec_len(species_file, seq_id_length, tree)
 
-    # # now make a loadable index from this new table of id, species, location
+    # # now make a loadable index from this new table of id, species, len, leaf name
     print("\n" + "="*60)
     print("STEP 3: Saving database index")
     print("="*60)
     with open(final_output, "wb") as f:
-        pickle.dump(seq_species_loc, f)
+        pickle.dump(seq_species_len, f)
 
     print(f"Hash index saved to {final_output}")
     print("="*60)
     print("DATABASE INDEX CREATION COMPLETED!")
+    print(f"Once you've ensured your build database and index is functional, you can delete {mgediva_db}/blat_fasta_db and {seq_lengths} to save space.")
     print("="*60)
