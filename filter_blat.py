@@ -13,23 +13,6 @@ import tempfile
 #import bisect
 from build_database_index import *
 from Bio import SeqIO
-#from collections import defaultdict
-#from twobitreader import TwoBitFile
-
-# def extract_2bit_file_batch(file_path_2bit, seq_ids):
-#     tb = TwoBitFile(file_path_2bit)
-#     seq_file_dict = dict()
-
-#     for name in seq_ids:
-#         if name in tb:
-#             with tempfile.NamedTemporaryFile(prefix=f"refs{name}", suffix=".fa", delete=False, mode='w') as temp_fa:
-#                     temp_path = temp_fa.name
-#             seq = tb[name]
-#             seq_file_dict[name] = temp_path
-#             with open(temp_path, "w") as out:
-#                 out.write(f">{name}\n{seq}\n")
-
-#     return seq_file_dict
 
 def crude_ani(len1, len2, matches):
     if 0 in [len1, len2]: return -1

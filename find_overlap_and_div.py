@@ -30,19 +30,16 @@ def find_overlap_and_div(rows, output_file, tree, skani_db, index):
 
     i = 0
 
-    # start_positions = [int(row[1][qs]) for row in rows]
-
     for i, row1 in enumerate(rows):
         if i in used:
             continue
 
         s1, e1, species1 = int(rows[i][qs]), int(rows[i][qe]), rows[i][rsp]
         
-        if i + 1 < len(rows) and  e1 < int(rows[i+1][qs]):
+        if i + 1 < len(rows) and e1 < int(rows[i+1][qs]):
             continue
         
         for j in range(i+1, len(rows)):
-            #print(i, j)
             if j in used:
                 continue
             s2, e2, species2, row2 = int(rows[j][qs]), int(rows[j][qe]), rows[j][rsp], rows[j]
@@ -76,6 +73,7 @@ def find_overlap_and_div(rows, output_file, tree, skani_db, index):
                 ani = check_cache(id1, id2, ani_cache)
                 if ani == None:
                     ani = find_ani_overlap(id1, id2, skani_db, index)
+                    if ani == "unk:too_short": ani = crude_ani_overlap(s1, e1, s2, e2, int(row1[5]), int(row2[5]))
                     ani_cache[(id1, id2)] = ani
 
                 
