@@ -12,18 +12,54 @@ git clone https://github.com/graceoualline/MGEdivA.git
 cd mgediva
 ```
 Install supporting files and databases here: 
-TODO: please upload the following files/directories for users to download:
+TODO: please upload all files that are in /usr1/shared/mgediva_github_large_files.
+You should have the following files:
 ```
-/usr1/shared/gtdb_2bil_split_2bit/
-/usr1/shared/mgediva_gtdb_2bil_index.pkl
-/usr1/shared/kraken2_custom_db/
-/usr1/shared/TimeTree_v5_Final.nwk
+├── divergence_tree.tar.gz
+├── kraken2_db.tar.gz
+└── mgediva_gtdb_db
+    ├── blat_2bit_db -> /usr1/shared/mgediva_gtdb_db
+    ├── mgediva_db_index.tar.gz
+    └── skani_db.tar.gz
+# you can also download these if you want to build the db/index yourself:
+gtdb_all_seqs.tar.gz
+all_gtdb_seq_kraken_species.tar.gz
 ```
-You should have the following:
-- gtdb_2bil_split_2bit
-- TimeTree_v5_Final.nwk
-- mgediva_gtdb_2bil_index.pkl
-- kraken2_custom_db
+Decompress the files:
+```
+tar -xzvf divergence_tree.tar.gz
+tar -xzvf kraken2_db.tar.gz
+tar -xzvf mgediva_gtdb_db
+tar -xzvf blat_2bit_db -> /usr1/shared/mgediva_gtdb_db
+tar -xzvf mgediva_db_index.tar.gz
+tar -xzvf skani_db.tar.gz
+```
+After decompressing the files, you should have the following:
+```
+divergence_tree/
+├── TimeTree_v5_Final.nwk
+├── TimeTree_v5.hashtable.pkl
+├── TimeTree_v5.index.npy
+├── TimeTree_v5.mins.npy
+└── TimeTree_v5.tour.npy
+
+mgediva_gtdb_db/
+├── blat_2bit_db
+│   ├── split_1_output.2bit
+│   ├── split_1_output.ooc
+...
+│   ├── split_137_output.2bit
+│   └── split_137_output.ooc
+├── mgediva_db_index.pkl
+└── skani_db
+    └── (all sequences of the gtdb)
+
+kraken2_db
+├── hash.k2d
+├── opts.k2d
+├── taxo.k2d
+└── unmapped.txt
+```
 ### Required Python Packages
 ```bash
 pip install biopython tqdm
@@ -39,24 +75,7 @@ Please ensure you have the following tools downloaded:
   ```bash
   conda install -c bioconda kraken2
   ```
-#### Kraken and Kraken Database
-We provide the kraken database ```kraken2_custom_db```. If you want to recreate it locally, do the following:
-```bash
-mkdir -p kraken2_custom_db
 
-kraken2-build --download-taxonomy --db kraken2_custom_db
-
-kraken2-build --download-library archaea --db kraken2_custom_db
-kraken2-build --download-library bacteria --db kraken2_custom_db
-kraken2-build --download-library plasmid --db kraken2_custom_db
-kraken2-build --download-library viral --db kraken2_custom_db
-kraken2-build --download-library fungi --db kraken2_custom_db
-kraken2-build --download-library protozoa --db kraken2_custom_db
-kraken2-build --download-library nt --db kraken2_custom_db
-
-kraken2-build --build --db kraken2_custom_db
-kraken2-build --clean --db kraken2_custom_db
-```
 ## Usage
 
 ### Quick Start
@@ -66,7 +85,7 @@ kraken2-build --clean --db kraken2_custom_db
 python3 mgediva.py -h
 
 # command line with only required arguments
-python3 mgediva.py -q input.fasta -o output_directory -d /path/to/blat_database -tr TimeTree_v5_Final.nwk -i database_index.txt -k /path/to/kraken_db --threads 20
+python3 mgediva.py -q input.fasta -o output_directory -d /path/to/mgediva_database -tr /path/to/divergence_tree -k /path/to/kraken_db --threads 20
 
 # with config
 python mgediva.py --config config_example.yaml
@@ -83,9 +102,8 @@ python3  /usr1/gouallin/blat/blat_pipeline/mgediva.py --config /usr1/gouallin/bl
 python3 /usr1/gouallin/blat/blat_pipeline/mgediva.py \
   -q /usr1/gouallin/blat/blat_pipeline/test/acrB.fasta \
   -o mgediva_test_results_acrB \
-  -d /usr1/shared/gtdb_2bil_split_2bit/ \
-  -tr /usr1/shared/TimeTree_v5_Final.nwk \
-  -i /usr1/shared/gtdb_2bil_seq_id_species_loc_index.pkl \
+  -d /usr1/shared/mgediva_gtdb_db/ \
+  -tr /usr1/gouallin/blat/divergence_tree \
   -k /usr1/shared/kraken2_custom_db/ \
   -t 20 \
   --no-remove \
@@ -100,20 +118,20 @@ python3 /usr1/gouallin/blat/blat_pipeline/mgediva.py \
 |-----------|-------------|
 | `-q, --query`| Path to the query FASTA file |
 | `-o, --output`| Name of your output directory 
-| `-d, --database`| Path to the BLAT database directory| |
-| `-tr, --tree`| Path to the TimeTree of Life tree file (TimeTree_v5_Final.nwk) |
-| `-i, --index`| Index file mapping sequences in BLAT database to species and locations |
+| `-d, --database`| Path to the MGEdivA database directory| |
+| `-tr, --tree`| Path to the phylogenetic tree directory |
 | `-k, --kraken`| Path to Kraken2 database |
 
 #### Optional Arguments
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-|`-t, --threads`| 1 | Number of threads to use - **Highly recommend using more threads to speed up the program.**|
+|`-t, --threads`| 1 | Number of threads to use - **Highly recommend using more threads to speed up the program.**| 
+| `-i, --index` | Taken from prebuilt mgediva database | Is a pkl formated file that describes all sequences in the Blat DB, its species, length, and leaf name in the phylogenetic tree. If you built your own index with separate species, you can define that index here.
 | `-c, --chunk`| 100000| Chunk size for sequence splitting |
 | `-s, --species`| auto-detect| Predefined species name (replace spaces with '_'). For multifasta files, applies to all sequences.|
 | `-minScore`| 30| Minimum BLAT alignment score |
 | `-minIdentity`|0| Minimum percent identity threshold|
-| `--remove, --no-remove`|True| Clean up temporary files. Use --remove to enable, --no-remove to disable.|
+| `--remove, --no-remove`|False| Clean up redundant files after running. Use --remove to enable, --no-remove to disable.|
 | `--overlap-filter, --no-overlap-filter`|False| Enable overlap filter. Use --overlap-filter to enable, --no-overlap-filter to disable.|
 | `--overlap-div-filter, --no-overlap-div-filter`|False| Enable overlap and divergence filter. Use --overlap-div-filter to enable, --no-overlap-div-filter to disable.|
 
@@ -124,18 +142,18 @@ Create a YAML configuration file for repeated analyses:
 # Required parameters
 query: sequences.fasta
 output: mgediva_results
-database: gtdb_2bil_split_2bit/
-tree: TimeTree_v5_Final.nwk
-index: gtdb_2bil_seq_id_species_loc_index.pkl
+database: mgediva_gtdb_db/
+tree: divergence_tree/
 kraken: kraken2_custom_db/
 
 # Optional parameters
 threads: 20
 chunk: 100000
 minIdentity: 95
+index: mgediva_gtdb_db/mgediva_db_index.pkl
 overlap_filter: false
 overlap_div_filter: false
-remove: true
+remove: false
 species: null  # Auto-detect with Kraken2
 minScore: 30
 minIdentity: 95 
@@ -143,14 +161,13 @@ minIdentity: 95
 
 ### Example Commands
 
-#### Basic Command with GTDB-Blat Database and 20 threads
+#### Basic Command with GTDB Database and 20 threads
 ```bash
 python mgediva.py \
   -q my_sequences.fasta \
   -o results_dir \
-  -d gtdb_2bil_split_2bit \
-  -tr TimeTree_v5_Final.nwk \
-  -i gtdb_2bil_seq_id_species_loc_index.pkl \
+  -d mgediva_gtdb_db \
+  -tr divergence_tree \
   -k kraken2_custom_db \
   -t 20 \
 ```
@@ -160,9 +177,8 @@ python mgediva.py \
 python mgediva.py \
   -q my_sequences.fasta \
   -o results_dir \
-  -d gtdb_2bil_split_2bit \
-  -tr TimeTree_v5_Final.nwk \
-  -i  gtdb_2bil_seq_id_species_loc_index.pkl \
+  -d mgediva_gtdb_db \
+  -tr divergence_tree \
   -k kraken2_custom_db \
   -t 20 \
   --overlap_filter \
@@ -190,7 +206,7 @@ These filters further refine the alignments that were identified as divergently 
 - It is the most stringent filter that effectively reduces false positives but may decrease sensitivity for detecting true MGEs and requires longer processing time.
 - Recommended for high-confidence MGE detection when processing time is not a constraint
 
-### Standard Output
+### Standard Output (with remove enabled, and all filtering options on):
 ```
 output_directory/
 ├── output_name_blat_results.tsv      # Raw BLAT alignments
@@ -225,15 +241,7 @@ mgediva_test_results_test/
 ├── mgediva_test_results_test_overlap_div.tsv
 └── mgediva_test_results_test_overlap.tsv
 ```
-chunk_{i}_{output_name} is the directory that will contain all of the raw BLAT output that is run on that chunk of the input sequence. The GTDB-BLAT database is split into 136 pieces to enable efficient parallelization of BLAT. The results are combined, and filtering is done separately for each chunk, generating chunk_{i}_{output_name}_{output or filter type}.tsv for each chunk. Then, at the very end, all chunks are combined into the final output files described above.
-#### Example output (with remove enabled, and all filtering options on):
-```
-mgediva_test_results_acrB/
-├── mgediva_test_results_acrB_blat_results.tsv
-├── mgediva_test_results_acrB_mgediva_output.tsv
-├── mgediva_test_results_acrB_overlap_div.tsv
-└── mgediva_test_results_acrB_overlap.tsv
-```
+chunk\_{i}\_{output_name} is the directory that will contain all of the raw BLAT output that is run on that chunk of the input sequence. The GTDB-BLAT database is split into 136 pieces to enable efficient parallelization of BLAT. The results are combined, and filtering is done separately for each chunk, generating chunk\_{i}_\{output_name}\_{output or filter type}.tsv for each chunk. Then, at the very end, all chunks are combined into the final output files described below.
 
 ### Resume Functionality
 Important: The program is designed to resume from interruptions by checking for existing files. If a run is stopped prematurely, it will restart from where it left off. Avoid creating files with names that could overlap with mgediva's output to prevent conflicts.
@@ -261,12 +269,12 @@ kraken2-build --clean --db kraken2_custom_db
 
 #### Pre-build GTDB-Blat Database
 We provide a ready-to-use BLAT-compatible database created from the Genome Taxonomy Database (GTDB):
-- **Database:** ```gtdb_2bil_split_2bit/```
-- **Index:** ```mgediva_gtdb_2bil_index.pkl```
+- **Database:** ```mgediva_gtdb_db/blat_2bit_db```
+- **Index:** ```mgediva_gtdb_db/mgediva_gtdb_2bil_index.pkl```
 
 ### Creating a Custom Blat database
--  If you wish to create your own database, follow these steps:
-#### Step 1: Build the Blat database
+-  If you wish to create your own database and index, follow these steps:
+#### Step 1: Build the Blat and Skani database
 The database must be in 2bit format with a maximum of ~2 billion base pairs per file. We recommend a size of 2 billion base pairs.
 ```
 python3 make_mgediva_db.py [fasta_file] [output_name] [size_in_bil_bp]
@@ -276,10 +284,12 @@ For example:
 python3 make_mgediva_db.py gtdb.fa mgediva_gtdb_db 2
 ```
 This script will:
+- Generate a file (output_name/seq_lengths.tsv) that contains the lengths of all sequences in your input fasta file
 - Split the multifasta file into chunks of specified size
 - Convert split files to 2bit format
 - Generate .ooc files for all 2bit files
 - Ensure each .2bit file has a matching .ooc file
+- Split every individual sequence into a separate file for quick use for calculating ani.
 #### Step 2: Extract Species Information
 Classify sequences using Kraken2:
 ```
@@ -287,7 +297,7 @@ python3 extract_species_from_kraken.py [fasta file] [kraken_db]
 ```
 ##### Outputs:
 - ```{fasta_file}_kraken_output.txt```: Kraken's detailed classification output
-- ```{fasta_file}_seq_species.txt```: Tab-separated file iwth sequence ID and species:
+- ```{fasta_file}_seq_species.txt```: Tab-separated file with sequence ID and species:
 ```
 seq_id1  species1
 seq_id2  species2
@@ -295,18 +305,22 @@ seq_id2  species2
 ```
 You can manually edit species assignments in the ```{fasta_file}_seq_species.txt``` file if needed.
 #### Step 3: Build the Database Index
-Create a hash table index linking sequence IDs to their location and species:
+Create a hash table index linking sequence IDs to their species, length, and leaf name in the phylogenetic tree:
 ```
-python3 build_database_index.py [blat_db_2bit_dir] [output_index_name.pkl] [{fasta_file}_seq_species.txt] [TimeTree_v5_Final.nwk]
+python3 build_database_index.py [mgediva_database_from_make_mgediva_db.py] [{fasta_file}_seq_species.txt] [divergence_tree]
 ```
-This creates an index where ```index[seq_id] = (species, location, species path in tree)```.
+This creates an index where ```index[seq_id] = (species, length, leaf name in tree)```.
 This index is crucial to the pipeline's speed.
 
 ## Required Files Summary
 1. **BLAT Database:** Directory containing .2bit and .ooc files
-2. **Index File:** .pkl file mapping sequence IDs to species, locations, and path in the phylogeny tree.
-3. **TimeTree File:** Newick format phylogenetic tree with relevant species
+2. **Index File:** .pkl file mapping sequence IDs to species, length, and leaf name in the phylogeny tree.
+3. **TimeTree Directory:** Phylogenetic tree with relevant species, preprocessed,
 4. **Kraken Database:** For taxonomic classification
+
+## Phylogenetic Tree
+We use the Time Tree of Life to calculate divergence times between species. From the original .nwk TimeTree file, we preprocessed the tree (as shown in this Google Colab notebook (link)
+) to allow finding the closest common ancestor in O(1) time. If a new .nwk file from the Time Tree becomes available, this notebook can be used to generate updated indexes and preprocess the tree for efficient queries. (cite timetree)
 
 ## Performance Tips
 1. Use Multiple Threads: Set -t to utilize available CPU cores (We use 46 in experimentation, although thread use will depend on one's resources.)
@@ -317,10 +331,13 @@ This index is crucial to the pipeline's speed.
 
 ## Workflow
 **Input Processing:** Reads FASTA sequences and (if not specified by the user) determines species classification via Kraken2
+
 **Chunking:** Splits sequences larger than chunk size into manageable pieces
+
 **Parallel BLAT Search:** Runs BLAT searches against database files using multiple threads
-**Filtering Pipeline:** Applies divergence other specified filters
-**Cleanup:** Removes intermediate files (if enabled)
+
+**Filtering Pipeline:** Applies divergence and other specified filters
+
 
 ## Citation
 
