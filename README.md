@@ -154,7 +154,7 @@ index: mgediva_gtdb_db/mgediva_db_index.pkl
 overlap_filter: false
 overlap_div_filter: false
 remove: false
-species: null  # Auto-detect with Kraken2
+species: None  # Auto-detect with Kraken2
 minScore: 30
 minIdentity: 95 
 ```
